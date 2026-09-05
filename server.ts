@@ -434,6 +434,8 @@ async function startServer() {
         accuracy,
         subjectBreakdown,
         questionsReview,
+        status: 'submitted',
+        submissionReason: req.body.submissionReason || 'regular_submission',
         submittedAt: new Date().toISOString(),
       };
 
@@ -451,6 +453,8 @@ async function startServer() {
         const sessionRef = doc(db, 'examSessions', sessionId);
         await updateDoc(sessionRef, {
           isSubmitted: true,
+          status: 'submitted',
+          submissionReason: req.body.submissionReason || 'regular_submission',
           submittedAt: new Date().toISOString(),
         });
       } catch (e) {

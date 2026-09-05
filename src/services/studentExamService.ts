@@ -378,12 +378,18 @@ export async function submitExamPaper(payload: {
   studentEmail: string;
   medium: MediumType;
   answers: Record<string, OptionKey>;
+  status?: string;
+  submissionReason?: string;
 }): Promise<{ success: boolean; result: ExamResultDocument; alreadySubmitted?: boolean }> {
   try {
     const res = await fetch('/api/exams/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        status: payload.status || 'submitted',
+        submissionReason: payload.submissionReason || 'regular_submission',
+      }),
     });
 
     const data = await res.json();
@@ -407,6 +413,113 @@ export async function submitExamPaper(payload: {
   } catch (error: any) {
     console.error('Exam submission error:', error);
     throw error;
+  }
+}
+
+/**
+ * Automatically triggers submission of the exam result with status 'submitted' to Firebase.
+ * Directly writes and updates the session document in Firestore to status: 'submitted',
+ * clears local storage, and invokes server-side evaluation or fallback Firestore result creation.
+ */
+export async function submitExamToFirebase(payload: {
+  examId: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  medium: MediumType;
+  answers: Record<string, OptionKey>;
+  status?: 'submitted';
+  submissionReason?: string;
+}): Promise<{ success: boolean; resultId: string; result?: ExamResultDocument }> {
+  const sessionId = `${payload.studentId}_${payload.examId}_${payload.medium}`;
+  const now = new Date().toISOString();
+
+  // 1. Direct Firestore session update to mark status as 'submitted'
+  try {
+    const sessionRef = doc(db, 'examSessions', sessionId);
+    await setDoc(
+      sessionRef,
+      {
+        sessionId,
+        studentId: payload.studentId,
+        studentName: payload.studentName,
+        examId: payload.examId,
+        medium: payload.medium,
+        isSubmitted: true,
+        status: 'submitted',
+        submissionReason: payload.submissionReason || 'auto_submitted_tab_switch_violation',
+        submittedAt: now,
+        answers: payload.answers,
+        lastSavedAt: Date.now(),
+      },
+      { merge: true }
+    );
+  } catch (sessionErr) {
+    console.warn('Direct Firestore session write error during auto-submit:', sessionErr);
+  }
+
+  // 2. Clear local storage session
+  try {
+    const storageKey = getStorageKey(payload.studentId, payload.examId, payload.medium);
+    localStorage.removeItem(storageKey);
+  } catch {}
+
+  // 3. Trigger evaluation & results creation
+  try {
+    const res = await submitExamPaper({
+      examId: payload.examId,
+      studentId: payload.studentId,
+      studentName: payload.studentName,
+      studentEmail: payload.studentEmail,
+      medium: payload.medium,
+      answers: payload.answers,
+      status: 'submitted',
+      submissionReason: payload.submissionReason || 'auto_submitted_tab_switch_violation',
+    });
+    return {
+      success: true,
+      resultId: res.result.id,
+      result: res.result,
+    };
+  } catch (apiErr) {
+    console.warn('API submission failed, creating direct result in Firestore with status submitted:', apiErr);
+    // 4. Fallback direct Firestore result creation
+    const fallbackResultId = `res_${payload.studentId}_${payload.examId}_${Date.now()}`;
+    const fallbackResultDoc: ExamResultDocument = {
+      id: fallbackResultId,
+      examId: payload.examId,
+      examTitle: 'Examination Paper',
+      studentId: payload.studentId,
+      studentName: payload.studentName,
+      studentEmail: payload.studentEmail,
+      medium: payload.medium,
+      totalScore: 0,
+      totalPossibleMarks: 100,
+      percentage: 0,
+      accuracy: 0,
+      status: 'submitted',
+      submissionReason: payload.submissionReason || 'auto_submitted_tab_switch_violation',
+      subjectBreakdown: {
+        math: { subject: 'math', obtainedMarks: 0, totalMarks: 25, correctCount: 0, incorrectCount: 0, unattemptedCount: 25, totalQuestions: 25 },
+        reasoning: { subject: 'reasoning', obtainedMarks: 0, totalMarks: 25, correctCount: 0, incorrectCount: 0, unattemptedCount: 25, totalQuestions: 25 },
+        hindi: { subject: 'hindi', obtainedMarks: 0, totalMarks: 25, correctCount: 0, incorrectCount: 0, unattemptedCount: 25, totalQuestions: 25 },
+        gk: { subject: 'gk', obtainedMarks: 0, totalMarks: 25, correctCount: 0, incorrectCount: 0, unattemptedCount: 25, totalQuestions: 25 },
+      },
+      questionsReview: [],
+      submittedAt: now,
+    };
+
+    try {
+      await setDoc(doc(db, 'results', fallbackResultId), fallbackResultDoc);
+    } catch (dbErr) {
+      console.error('Direct Firestore results doc creation error:', dbErr);
+    }
+
+    return {
+      success: true,
+      resultId: fallbackResultId,
+      result: fallbackResultDoc,
+    };
   }
 }
 

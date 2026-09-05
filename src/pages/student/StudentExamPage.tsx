@@ -18,11 +18,14 @@ import {
   initializeOrRestoreSession,
   syncSessionState,
   submitExamPaper,
+  submitExamToFirebase,
   fetchStrippedExamQuestions,
 } from '../../services/studentExamService';
+import { useExamAntiCheat } from '../../hooks/useExamAntiCheat';
 import {
   Clock,
   AlertCircle,
+  AlertTriangle,
   ChevronLeft,
   ChevronRight,
   Bookmark,
@@ -74,13 +77,9 @@ export const StudentExamPage: React.FC = () => {
   // Modals
   const [showEarlyFinishModal, setShowEarlyFinishModal] = useState(false);
   const [showFinalSubmitModal, setShowFinalSubmitModal] = useState(false);
-
-  // Anti-Cheat & Security State
-  const [violationCount, setViolationCount] = useState<number>(0);
   const [showSecurityWarningModal, setShowSecurityWarningModal] = useState<boolean>(false);
   const [securityWarningReason, setSecurityWarningReason] = useState<string>('');
   const [isAutoSubmittedDueToViolation, setIsAutoSubmittedDueToViolation] = useState<boolean>(false);
-  const [isWindowBlurred, setIsWindowBlurred] = useState<boolean>(false);
 
   // Refs for background intervals, listeners, and dirty state
   const dirtyRef = useRef<boolean>(false);
@@ -99,90 +98,87 @@ export const StudentExamPage: React.FC = () => {
   const isSubmittingRef = useRef<boolean>(isSubmitting);
   isSubmittingRef.current = isSubmitting;
 
-  const violationCountRef = useRef<number>(0);
-  const lastViolationTimeRef = useRef<number>(0);
+  // Handle automatic submission to Firebase on second violation (Strike 2)
+  const handleAutoSubmitOnSecondViolation = useCallback(
+    async (violationReason: string) => {
+      if (isSubmittingRef.current || !examRef.current || !user?.uid) return;
+      isSubmittingRef.current = true;
+      setIsSubmitting(true);
+      setIsAutoSubmittedDueToViolation(true);
+      setShowSecurityWarningModal(false);
 
-  // Play browser warning alert sound (via Web Audio API)
-  const playWarningBeep = useCallback(() => {
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-      const ctx = new AudioContextClass();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(440, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3);
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.35);
-    } catch {
-      // AudioContext blocked by browser policy until interaction
-    }
-  }, []);
+      try {
+        // Automatically trigger a call to a Firebase function to submit the exam result as 'submitted'
+        const response = await submitExamToFirebase({
+          examId: examRef.current.id,
+          studentId: user.uid,
+          studentName: user.displayName || 'Student',
+          studentEmail: user.email || '',
+          medium,
+          answers: answersRef.current,
+          status: 'submitted',
+          submissionReason:
+            violationReason ||
+            'Second instance of tab switching / window blur proctor violation',
+        });
 
-  // Final auto submit function
+        // Navigate the user to the completion screen
+        navigate(`/student/result/${response.resultId}`, { replace: true });
+      } catch (err) {
+        console.error('Auto submission to Firebase on violation failed:', err);
+        const fallbackResultId = `result_${examRef.current.id}_${user.uid}_${Date.now()}`;
+        navigate(`/student/result/${fallbackResultId}`, { replace: true });
+      }
+    },
+    [user, medium, navigate]
+  );
+
+  // Custom hook that listens for visibilitychange (tab switching) and blur events
+  // - On the first instance: triggers prominent warning toast & alert
+  // - On the second instance: triggers auto submit to Firebase and navigates to completion screen
+  const {
+    violationCount,
+    isWindowBlurred,
+    warningToast,
+    dismissWarningToast,
+    triggerManualViolation,
+  } = useExamAntiCheat({
+    enabled: Boolean(exam && !loading && !isSubmitting),
+    maxViolations: 2,
+    debounceMs: 2500,
+    onFirstWarning: ({ reason }) => {
+      setSecurityWarningReason(reason);
+      setShowSecurityWarningModal(true);
+    },
+    onSecondViolation: async ({ reason }) => {
+      setSecurityWarningReason(reason);
+      await handleAutoSubmitOnSecondViolation(reason);
+    },
+  });
+
+  // Final auto submit function (e.g. when timer expires)
   const handleFinalAutoSubmit = useCallback(
     async (examDoc: ExamDocument, finalAnswers: Record<string, OptionKey>) => {
       if (!user?.uid || isSubmittingRef.current) return;
       isSubmittingRef.current = true;
       setIsSubmitting(true);
       try {
-        const res = await submitExamPaper({
+        const res = await submitExamToFirebase({
           examId: examDoc.id,
           studentId: user.uid,
           studentName: user.displayName || 'Student',
           studentEmail: user.email || '',
           medium,
           answers: finalAnswers,
+          status: 'submitted',
+          submissionReason: 'session_time_expired',
         });
-        navigate(`/student/result/${res.result.id}`, { replace: true });
+        navigate(`/student/result/${res.resultId}`, { replace: true });
       } catch (err) {
         console.error('Auto submission error:', err);
       }
     },
     [user, medium, navigate]
-  );
-
-  // Security violation handler: Strike 1 = Warning Modal, Strike 2 = Immediate Auto-Submit
-  const handleSecurityViolation = useCallback(
-    (reason: string) => {
-      if (isSubmittingRef.current || !examRef.current || loading) return;
-
-      const now = Date.now();
-      // Debounce so a single blur+visibility change counts as 1 strike, not 2
-      if (now - lastViolationTimeRef.current < 3500) return;
-      lastViolationTimeRef.current = now;
-
-      const nextCount = violationCountRef.current + 1;
-      violationCountRef.current = nextCount;
-      setViolationCount(nextCount);
-
-      // Audio alarm and device vibration
-      playWarningBeep();
-      if (navigator.vibrate) {
-        try {
-          navigator.vibrate([300, 150, 300]);
-        } catch {}
-      }
-
-      if (nextCount === 1) {
-        // Strike 1: High-alert Warning Modal
-        setSecurityWarningReason(reason);
-        setShowSecurityWarningModal(true);
-      } else if (nextCount >= 2) {
-        // Strike 2: Automatic Paper Submission immediately!
-        setShowSecurityWarningModal(false);
-        setIsAutoSubmittedDueToViolation(true);
-        if (examRef.current) {
-          handleFinalAutoSubmit(examRef.current, answersRef.current);
-        }
-      }
-    },
-    [loading, playWarningBeep, handleFinalAutoSubmit]
   );
 
   // 1. Initial Load: Check if already completed, fetch questions and restore session
@@ -314,7 +310,7 @@ export const StudentExamPage: React.FC = () => {
     return () => clearInterval(syncInterval);
   }, [session]);
 
-  // 4. Anti-Cheat & Screen Protection Listeners (Tab close, Tab switch, Google Circle to Search, Screenshot tools)
+  // 4. Additional Anti-Cheat & Screen Protection Listeners (Tab close, Screenshot keys, Devtools, Copy/Paste)
   useEffect(() => {
     if (!exam || isSubmitting || loading) return;
 
@@ -326,31 +322,7 @@ export const StudentExamPage: React.FC = () => {
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // B. Visibility change (Tab switch, minimizing browser, split screen, Google Circle to Search overlay)
-    const handleVisibilityChange = () => {
-      if (document.hidden || document.visibilityState === 'hidden') {
-        setIsWindowBlurred(true);
-        handleSecurityViolation('Tab switch / Google Circle to Search / Background app detected');
-      } else {
-        setIsWindowBlurred(false);
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // C. Window blur / focus (Screen capture overlay, Google Circle to Search, floating apps, alt-tab)
-    const handleWindowBlur = () => {
-      setIsWindowBlurred(true);
-      handleSecurityViolation('Window unfocused / Google Circle to Search / Screen capture overlay detected');
-    };
-
-    const handleWindowFocus = () => {
-      setIsWindowBlurred(false);
-    };
-
-    window.addEventListener('blur', handleWindowBlur);
-    window.addEventListener('focus', handleWindowFocus);
-
-    // D. Anti-Screenshot & Keyboard shortcuts interception
+    // B. Anti-Screenshot & Keyboard shortcuts interception
     const handleKeyDown = (e: KeyboardEvent) => {
       // PrintScreen key
       if (e.key === 'PrintScreen' || e.code === 'PrintScreen') {
@@ -358,14 +330,14 @@ export const StudentExamPage: React.FC = () => {
         try {
           navigator.clipboard?.writeText('');
         } catch {}
-        handleSecurityViolation('Screenshot attempt (PrintScreen key detected)');
+        triggerManualViolation('Screenshot attempt (PrintScreen key detected)');
         return;
       }
 
       // F12 developer tools
       if (e.key === 'F12') {
         e.preventDefault();
-        handleSecurityViolation('Developer inspection tools (F12) are blocked');
+        triggerManualViolation('Developer inspection tools (F12) are blocked');
         return;
       }
 
@@ -374,28 +346,28 @@ export const StudentExamPage: React.FC = () => {
         if (['c', 'x', 'v', 'u', 's', 'p'].includes(key)) {
           e.preventDefault();
           if (key === 'c' || key === 'x') {
-            handleSecurityViolation('Copy / Cut action blocked');
+            triggerManualViolation('Copy / Cut action blocked');
           } else if (key === 'p') {
-            handleSecurityViolation('Print / PDF export action blocked');
+            triggerManualViolation('Print / PDF export action blocked');
           }
           return;
         }
         if (e.shiftKey && ['i', 'j', 'c'].includes(key)) {
           e.preventDefault();
-          handleSecurityViolation('Developer inspection tools are blocked');
+          triggerManualViolation('Developer inspection tools are blocked');
           return;
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    // E. Disable right-click context menu
+    // C. Disable right-click context menu
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
     };
     document.addEventListener('contextmenu', handleContextMenu);
 
-    // F. Prevent copy, cut, paste, and drag
+    // D. Prevent copy, cut, paste, and drag
     const handleCopyCut = (e: ClipboardEvent) => {
       e.preventDefault();
       try {
@@ -412,16 +384,13 @@ export const StudentExamPage: React.FC = () => {
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('blur', handleWindowBlur);
-      window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('copy', handleCopyCut);
       document.removeEventListener('cut', handleCopyCut);
       document.removeEventListener('dragstart', handleDragStart);
     };
-  }, [exam, isSubmitting, loading, handleSecurityViolation]);
+  }, [exam, isSubmitting, loading, triggerManualViolation]);
 
   // Subject expiration handler: lock current subject and advance to next
   const handleSubjectTimeExpired = useCallback(async () => {
@@ -587,17 +556,19 @@ export const StudentExamPage: React.FC = () => {
     setShowFinalSubmitModal(false);
 
     try {
-      const res = await submitExamPaper({
+      const res = await submitExamToFirebase({
         examId: exam.id,
         studentId: user.uid,
         studentName: user.displayName || 'Student',
         studentEmail: user.email || '',
         medium,
         answers,
+        status: 'submitted',
+        submissionReason: 'user_submitted',
       });
 
       // Navigate immediately to Result screen
-      navigate(`/student/result/${res.result.id}`, { replace: true });
+      navigate(`/student/result/${res.resultId}`, { replace: true });
     } catch (err: any) {
       console.error('Final submission error:', err);
       alert(`Submission error: ${err.message || 'Please try submitting again.'}`);
@@ -660,6 +631,66 @@ export const StudentExamPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F3EFFA] flex flex-col exam-secure-shield relative select-none">
+      {/* PROMINENT WARNING TOAST (Instance 1: Tab Switching / Window Blur) */}
+      {warningToast && warningToast.visible && (
+        <div
+          id="exam-security-warning-toast"
+          role="alert"
+          aria-live="assertive"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[94%] max-w-xl pointer-events-auto transition-all duration-300"
+        >
+          <div className="bg-[#1A1033] text-white border-2 border-amber-400 rounded-2xl p-4 sm:p-5 shadow-2xl shadow-black/80 flex items-start gap-3.5 backdrop-blur-md">
+            <div className="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-400 text-amber-400 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-6 h-6 animate-pulse" />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-[#1A1033] shadow-xs">
+                  ⚠️ Strike {warningToast.strikeNumber} of 2
+                </span>
+                <span className="text-[11px] font-mono font-bold text-amber-300">
+                  Tab Switch / Window Blur Detected
+                </span>
+              </div>
+
+              <h4 className="text-sm font-extrabold text-white tracking-tight">
+                {warningToast.title}
+              </h4>
+
+              <p className="text-xs text-[#E3DAF7] mt-1 leading-relaxed">
+                {warningToast.message}
+              </p>
+
+              <div className="mt-2.5 p-2.5 bg-amber-500/15 border border-amber-400/40 rounded-xl text-[11px] text-amber-200 leading-relaxed">
+                <strong>Attention:</strong> If you switch tabs, minimize the browser, or unfocus this window a <strong>second time</strong>, your examination will be <strong>automatically submitted immediately to Firebase</strong>.
+              </div>
+
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  id="acknowledge-warning-toast-btn"
+                  onClick={dismissWarningToast}
+                  className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#1A1033] text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-md hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  I Understand & Acknowledge
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              id="dismiss-warning-toast-btn"
+              onClick={dismissWarningToast}
+              className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+              aria-label="Dismiss warning notification"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Dynamic Security Watermark (Candidate Name & ID Diagonal Grid) */}
       <div
         className="fixed inset-0 pointer-events-none select-none z-10 overflow-hidden flex flex-wrap items-center justify-around gap-20 opacity-[0.03] text-xs font-mono font-bold uppercase rotate-[-22deg] text-[#241748]"

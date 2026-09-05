@@ -257,6 +257,8 @@ export interface ExamResultDocument {
   questionsReview: QuestionReviewItem[];
   submittedAt: string;
   timeSpentSeconds?: number;
+  status?: 'submitted' | 'in_progress' | string;
+  submissionReason?: string;
 }
 
 export interface StudentExamSession {
@@ -273,6 +275,8 @@ export interface StudentExamSession {
   markedForReview: Record<string, boolean>; // questionId -> boolean
   lastSavedAt: number; // epoch ms
   isSubmitted: boolean;
+  status?: 'submitted' | 'in_progress' | string;
+  submissionReason?: string;
   securityViolations?: number;
 }
 
