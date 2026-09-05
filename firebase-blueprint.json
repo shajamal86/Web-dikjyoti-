@@ -1,0 +1,174 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document containing authentication identity, role assignment, and access privileges for Dikjyoti Online Test",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Unique Firebase Authentication UID",
+          "maxLength": 128
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User full name",
+          "maxLength": 100,
+          "minLength": 1
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address",
+          "maxLength": 256
+        },
+        "role": {
+          "type": "string",
+          "enum": ["student", "teacher"],
+          "description": "Role determining access to student exam portals or teacher administration"
+        },
+        "isBlocked": {
+          "type": "boolean",
+          "description": "Indicates whether the account has been blocked by an administrator"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Account registration timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last profile update timestamp",
+          "maxLength": 64
+        },
+        "provider": {
+          "type": "string",
+          "description": "Authentication provider identifier (password, google.com)",
+          "maxLength": 50
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Optional profile picture URL",
+          "maxLength": 1000
+        }
+      },
+      "required": ["uid", "displayName", "email", "role"]
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "Master exam document created by a teacher, defining subject durations, medium configurations, passwords, and publication status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "live"] },
+        "subjectDurations": {
+          "type": "object",
+          "properties": {
+            "math": { "type": "number" },
+            "reasoning": { "type": "number" },
+            "hindi": { "type": "number" },
+            "gk": { "type": "number" }
+          }
+        },
+        "mediums": {
+          "type": "object",
+          "properties": {
+            "hindi": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "password": { "type": "string" },
+                "completedSubjects": { "type": "array", "items": { "type": "string" } },
+                "totalQuestions": { "type": "number" }
+              }
+            },
+            "assamese": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "password": { "type": "string" },
+                "completedSubjects": { "type": "array", "items": { "type": "string" } },
+                "totalQuestions": { "type": "number" }
+              }
+            }
+          }
+        },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "teacherId", "title", "status"]
+    },
+    "QuestionSet": {
+      "title": "QuestionSet",
+      "description": "Single-document storage of all questions for one (exam, subject, medium) combination",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "examId": { "type": "string" },
+        "medium": { "type": "string", "enum": ["hindi", "assamese"] },
+        "subject": { "type": "string", "enum": ["math", "reasoning", "hindi", "gk"] },
+        "isCompleted": { "type": "boolean" },
+        "questions": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "examId", "medium", "subject", "questions"]
+    },
+    "StudentPrivateDetails": {
+      "title": "StudentPrivateDetails",
+      "description": "Confidential student registration details including mobile number, father's name, and separated village and post office address",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "mobile": { "type": "string" },
+        "fathersName": { "type": "string" },
+        "village": { "type": "string" },
+        "postOffice": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "mobile", "fathersName", "village", "postOffice"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Student notification record dispatched when an exam is made live, supporting permanent per-student deletion",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "examId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "read": { "type": "boolean" },
+        "type": { "type": "string", "enum": ["exam_live", "announcement"] }
+      },
+      "required": ["id", "studentId", "title", "message", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile collection containing role metadata and account settings"
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": "StudentPrivateDetails",
+      "description": "Protected student registration data readable only by the student themselves and authorized faculty"
+    },
+    "/users/{userId}/notifications/{notifId}": {
+      "schema": "Notification",
+      "description": "Per-student notification inbox supporting independent permanent deletion"
+    },
+    "/exams/{examId}": {
+      "schema": "Exam",
+      "description": "Master exam specifications, subject timings, and publication status"
+    },
+    "/exams/{examId}/questionSets/{setId}": {
+      "schema": "QuestionSet",
+      "description": "Array-based question storage for an exam-medium-subject combination"
+    }
+  }
+}

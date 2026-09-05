@@ -1,0 +1,6 @@
+{
+  "name": "Dikjyoti Online Test",
+  "description": "Production-ready online examination platform for students and teachers with timed exams, rankings, and role-based portals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

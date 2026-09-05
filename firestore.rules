@@ -1,0 +1,182 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Health / probe check
+    match /_health/{docId} {
+      allow read: if true;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userDocExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isTeacher() {
+      return isSignedIn() && 
+        userDocExists() && 
+        getUserData().get('role', '') == 'teacher';
+    }
+
+    function isNotBlocked() {
+      return isSignedIn() && (
+        !userDocExists() || 
+        getUserData().get('isBlocked', false) == false
+      );
+    }
+
+    // 1. users/{userId}
+    // Readable by any signed-in user (needed to display names across the site)
+    // User can create own profile document on sign-up with role "student" or "teacher"
+    // User can update own profile, but NEVER change role or isBlocked (only teacher can change isBlocked)
+    // Only a teacher can delete a user record
+    match /users/{userId} {
+      allow read: if isSignedIn();
+
+      allow create: if isOwner(userId) && (
+        request.resource.data.get('role', '') == 'student' || 
+        request.resource.data.get('role', '') == 'teacher'
+      );
+
+      allow update: if isSignedIn() && (
+        isTeacher() ||
+        (
+          isOwner(userId) &&
+          request.resource.data.get('role', '') == resource.data.get('role', '') &&
+          request.resource.data.get('isBlocked', false) == resource.data.get('isBlocked', false)
+        )
+      );
+
+      allow delete: if isTeacher();
+
+      // users/{userId}/private/{doc} (mobile, father's name, village, P.O.)
+      // Readable and writable only by that student themselves or by a teacher — never by any other student.
+      match /private/{docId} {
+        allow read, write: if isSignedIn() && (isOwner(userId) || isTeacher());
+      }
+
+      // Per-student notification inbox
+      // Student can read and permanently delete only their own notifications
+      match /notifications/{notifId} {
+        allow read, delete: if isSignedIn() && (isOwner(userId) || isTeacher());
+        allow create, update: if isTeacher();
+      }
+    }
+
+    // Root-level student private details fallback for backward compatibility
+    match /studentDetails/{studentId} {
+      allow read, write: if isSignedIn() && (isOwner(studentId) || isTeacher());
+      allow delete: if isTeacher();
+    }
+
+    // 2. exams/{examId}
+    // Readable by any signed-in, non-blocked user; created/updated/deleted only by a teacher
+    match /exams/{examId} {
+      allow read: if isNotBlocked();
+      allow create, update, delete: if isTeacher();
+
+      // exams/{examId}/examQuestions/{subjectMediumId}
+      // Array-based question documents: readable and writable only by a teacher directly
+      // Students only ever receive question data (with correctOption stripped) through a callable Cloud Function
+      match /examQuestions/{subjectMediumId} {
+        allow read, write: if isTeacher();
+      }
+
+      // Alias subcollection for existing exams
+      match /questionSets/{subjectMediumId} {
+        allow read, write: if isTeacher();
+      }
+
+      // exams/{examId}/mediumAccess/{medium}
+      // Medium passwords: readable and writable only by a teacher
+      // Students validate password through server API / callable Cloud Function that returns only true/false
+      match /mediumAccess/{medium} {
+        allow read, write: if isTeacher();
+      }
+    }
+
+    // 3. examAttempts/{attemptId} (and examSessions)
+    // A student can create/read/update only their own attempt document, and only while it is not yet marked submitted
+    // A teacher can delete any attempt
+    match /examAttempts/{attemptId} {
+      allow read: if isSignedIn() && (
+        resource.data.get('studentId', '') == request.auth.uid ||
+        isTeacher()
+      );
+
+      allow create: if isSignedIn() &&
+        request.resource.data.get('studentId', '') == request.auth.uid &&
+        request.resource.data.get('isSubmitted', false) == false;
+
+      allow update: if isSignedIn() &&
+        resource.data.get('studentId', '') == request.auth.uid &&
+        resource.data.get('isSubmitted', false) == false;
+
+      allow delete: if isTeacher();
+    }
+
+    match /examSessions/{sessionId} {
+      allow read: if isSignedIn() && (
+        resource.data.get('studentId', '') == request.auth.uid ||
+        isTeacher()
+      );
+
+      allow create: if isSignedIn() &&
+        request.resource.data.get('studentId', '') == request.auth.uid &&
+        request.resource.data.get('isSubmitted', false) == false;
+
+      allow update: if isSignedIn() &&
+        resource.data.get('studentId', '') == request.auth.uid &&
+        resource.data.get('isSubmitted', false) == false;
+
+      allow delete: if isTeacher();
+    }
+
+    // 4. results/{resultId}
+    // Readable by any signed-in user (needed for the leaderboard and history features)
+    // NEVER writable directly by any client — only a Cloud Function using Admin SDK may create/update
+    match /results/{resultId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // 5. leaderboardSummary/{docId} and summaries/{docId}
+    // Pre-aggregated ranking data: readable by any signed-in user; writable only by Cloud Function
+    match /leaderboardSummary/{docId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    match /summaries/{docId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // 6. notifications/{notificationId}
+    // A student can read and delete only their own; created only by Cloud Function
+    match /notifications/{notificationId} {
+      allow read, delete: if isSignedIn() && (
+        resource.data.get('studentId', '') == request.auth.uid ||
+        isTeacher()
+      );
+      allow create, update: if isTeacher();
+    }
+  }
+}

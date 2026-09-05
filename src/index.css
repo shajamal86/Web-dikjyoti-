@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --purple-deep: #3E2072;
+    --purple: #5B2E9E;
+    --purple-mid: #7C4FD1;
+    --purple-light: #9B6FE0;
+    --pink: #F5A8C6;
+    --pink-text: #D1467B;
+    --bg: #F3EFFA;
+    --white: #FFFFFF;
+    --ink: #241748;
+    --gray: #9B93A8;
+    --gray-line: #ECE7F5;
+
+    --font-sans: 'Poppins', sans-serif;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #F3EFFA;
+    color: #241748;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-sans);
+    color: #241748;
+  }
+
+  .font-brand-display {
+    font-family: var(--font-sans);
+    font-weight: 700;
+  }
+}
+
