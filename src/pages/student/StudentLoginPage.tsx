@@ -353,6 +353,18 @@ export const StudentLoginPage: React.FC = () => {
                   About Dikjyoti & Helpline
                 </Link>
               </p>
+
+              <div className="pt-2 border-t border-[#F0EDF7] w-full text-center">
+                <p className="text-[#9B93A8] text-[11px]">
+                  Instructor or Administrator?{' '}
+                  <Link
+                    to="/teacher/login"
+                    className="font-bold text-[#5B2E9E] hover:text-[#3E2072] underline transition-colors"
+                  >
+                    Go to Teacher Portal →
+                  </Link>
+                </p>
+              </div>
             </div>
           </div>
         </div>

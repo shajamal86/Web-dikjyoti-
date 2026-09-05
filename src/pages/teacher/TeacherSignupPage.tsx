@@ -90,24 +90,27 @@ export const TeacherSignupPage: React.FC = () => {
   return (
     <div className="min-h-[85vh] flex items-center justify-center py-10 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md">
-        <div className="bg-white border border-[#1B2A4A]/15 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-[#ECE7F5] rounded-2xl shadow-xs overflow-hidden">
           {/* Header Banner */}
-          <div className="bg-[#1B2A4A] px-6 py-7 text-white text-center relative border-b border-[#253963]">
-            <div className="w-12 h-12 rounded-lg bg-[#24375F] border border-[#D4AF37]/50 mx-auto flex items-center justify-center text-[#D4AF37] mb-3 shadow-inner">
+          <div
+            className="px-6 py-7 text-white text-center relative"
+            style={{ background: 'linear-gradient(135deg, #3E2072, #5B2E9E)' }}
+          >
+            <div className="w-12 h-12 rounded-xl bg-white/10 mx-auto flex items-center justify-center text-[#F5A8C6] mb-3 shadow-xs">
               <Award className="w-6 h-6" />
             </div>
-            <h1 className="font-serif-heading text-2xl font-bold text-white tracking-wide">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-wide">
               Teacher & Faculty Sign-Up
             </h1>
-            <p className="text-xs text-[#D4AF37] mt-1 font-medium">
+            <p className="text-xs text-[#F5A8C6] mt-1 font-medium">
               One-Time Faculty Registration • Passcode Protected
             </p>
           </div>
 
           <div className="p-6 sm:p-8 space-y-5">
             {/* Notice about one-time passcode */}
-            <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-amber-900 text-xs flex items-start gap-2.5">
-              <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div className="p-3 bg-[#FAF6FF] border border-[#EDE1FA] rounded-xl text-[#5B2E9E] text-xs flex items-start gap-2.5">
+              <ShieldAlert className="w-4 h-4 text-[#5B2E9E] shrink-0 mt-0.5" />
               <div className="leading-relaxed">
                 Teacher registration requires an administrative <strong>Secret Passcode</strong>. This
                 code is only required once during sign-up; subsequent logins will use your email and
@@ -116,19 +119,19 @@ export const TeacherSignupPage: React.FC = () => {
             </div>
 
             {errorMessage && (
-              <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5">
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
-                <div className="leading-relaxed">{errorMessage}</div>
+                <div className="leading-relaxed font-medium">{errorMessage}</div>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[#1B2A4A] mb-1.5">
+                <label className="block text-xs font-bold text-[#241748] mb-1.5">
                   Faculty Name
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#9B93A8]">
                     <User className="w-4 h-4" />
                   </div>
                   <input
@@ -137,17 +140,17 @@ export const TeacherSignupPage: React.FC = () => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Prof. / Dr. / Instructor Name"
-                    className="w-full pl-9 pr-3 py-2.5 text-sm bg-[#F8F7F4] border border-slate-300 rounded-lg text-[#1B2A4A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B2A4A] focus:border-transparent transition-all"
+                    className="w-full pl-9 pr-3 py-2.5 text-xs sm:text-sm bg-[#FAF9FD] border border-[#ECE7F5] rounded-xl text-[#241748] placeholder-[#B5AFBF] focus:outline-none focus:ring-2 focus:ring-[#5B2E9E] focus:border-transparent transition-all"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#1B2A4A] mb-1.5">
+                <label className="block text-xs font-bold text-[#241748] mb-1.5">
                   Official Email Address
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#9B93A8]">
                     <Mail className="w-4 h-4" />
                   </div>
                   <input
@@ -156,7 +159,7 @@ export const TeacherSignupPage: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="faculty@dikjyoti.org"
-                    className="w-full pl-9 pr-3 py-2.5 text-sm bg-[#F8F7F4] border border-slate-300 rounded-lg text-[#1B2A4A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B2A4A] focus:border-transparent transition-all"
+                    className="w-full pl-9 pr-3 py-2.5 text-xs sm:text-sm bg-[#FAF9FD] border border-[#ECE7F5] rounded-xl text-[#241748] placeholder-[#B5AFBF] focus:outline-none focus:ring-2 focus:ring-[#5B2E9E] focus:border-transparent transition-all"
                   />
                 </div>
               </div>
@@ -164,16 +167,16 @@ export const TeacherSignupPage: React.FC = () => {
               {/* Secret Passcode Field */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-[#1B2A4A] flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <label className="text-xs font-bold text-[#241748] flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-[#5B2E9E]" />
                     <span>Secret Passcode</span>
                   </label>
-                  <span className="text-[10px] text-amber-700 font-semibold bg-amber-100/60 px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] text-[#5B2E9E] font-bold bg-[#EDE1FA] px-2 py-0.5 rounded-full">
                     Required
                   </span>
                 </div>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#D4AF37]">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#5B2E9E]">
                     <KeyRound className="w-4 h-4" />
                   </div>
                   <input
@@ -182,12 +185,12 @@ export const TeacherSignupPage: React.FC = () => {
                     value={secretPasscode}
                     onChange={(e) => setSecretPasscode(e.target.value)}
                     placeholder="Enter official teacher passcode"
-                    className="w-full pl-9 pr-10 py-2.5 text-sm bg-[#F8F7F4] border-2 border-amber-300 rounded-lg text-[#1B2A4A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] transition-all font-mono text-xs"
+                    className="w-full pl-9 pr-10 py-2.5 text-xs sm:text-sm bg-[#FAF9FD] border-2 border-[#F5A8C6] rounded-xl text-[#241748] placeholder-[#B5AFBF] focus:outline-none focus:ring-2 focus:ring-[#5B2E9E] transition-all font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPasscode(!showPasscode)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#9B93A8] hover:text-[#241748] focus:outline-none"
                   >
                     {showPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -195,11 +198,11 @@ export const TeacherSignupPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#1B2A4A] mb-1.5">
-                  Account Password <span className="text-slate-400 font-normal">(min 6 characters)</span>
+                <label className="block text-xs font-bold text-[#241748] mb-1.5">
+                  Account Password <span className="text-[#9B93A8] font-normal">(min 6 characters)</span>
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#9B93A8]">
                     <Lock className="w-4 h-4" />
                   </div>
                   <input
@@ -209,12 +212,12 @@ export const TeacherSignupPage: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-9 pr-10 py-2.5 text-sm bg-[#F8F7F4] border border-slate-300 rounded-lg text-[#1B2A4A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B2A4A] focus:border-transparent transition-all"
+                    className="w-full pl-9 pr-10 py-2.5 text-xs sm:text-sm bg-[#FAF9FD] border border-[#ECE7F5] rounded-xl text-[#241748] placeholder-[#B5AFBF] focus:outline-none focus:ring-2 focus:ring-[#5B2E9E] focus:border-transparent transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#9B93A8] hover:text-[#241748] focus:outline-none"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -222,11 +225,11 @@ export const TeacherSignupPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#1B2A4A] mb-1.5">
+                <label className="block text-xs font-bold text-[#241748] mb-1.5">
                   Confirm Password
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#9B93A8]">
                     <Lock className="w-4 h-4" />
                   </div>
                   <input
@@ -236,7 +239,7 @@ export const TeacherSignupPage: React.FC = () => {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-9 pr-3 py-2.5 text-sm bg-[#F8F7F4] border border-slate-300 rounded-lg text-[#1B2A4A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B2A4A] focus:border-transparent transition-all"
+                    className="w-full pl-9 pr-3 py-2.5 text-xs sm:text-sm bg-[#FAF9FD] border border-[#ECE7F5] rounded-xl text-[#241748] placeholder-[#B5AFBF] focus:outline-none focus:ring-2 focus:ring-[#5B2E9E] focus:border-transparent transition-all"
                   />
                 </div>
               </div>
@@ -245,26 +248,26 @@ export const TeacherSignupPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#D4AF37] hover:bg-[#c4a12f] text-[#1B2A4A] text-sm font-bold rounded-lg transition-colors shadow-sm disabled:opacity-60"
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#3E2072] hover:bg-[#341b60] text-white text-xs sm:text-sm font-bold rounded-xl transition-colors shadow-xs disabled:opacity-60 cursor-pointer"
                 >
                   {submitting ? (
-                    <div className="w-4 h-4 border-2 border-[#1B2A4A]/30 border-t-[#1B2A4A] rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                   ) : (
                     <>
                       <span>Register Teacher Account</span>
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-4 h-4 text-[#F5A8C6]" />
                     </>
                   )}
                 </button>
               </div>
             </form>
 
-            <div className="pt-4 border-t border-slate-100 text-center text-xs space-y-2">
-              <p className="text-[#5A6B82]">
+            <div className="pt-4 border-t border-[#F0EDF7] text-center text-xs space-y-2">
+              <p className="text-[#6B5E82]">
                 Already registered with your passcode?{' '}
                 <Link
                   to="/teacher/login"
-                  className="font-bold text-[#1B2A4A] hover:text-[#D4AF37] underline transition-colors"
+                  className="font-bold text-[#5B2E9E] hover:text-[#3E2072] underline transition-colors"
                 >
                   Teacher Login
                 </Link>

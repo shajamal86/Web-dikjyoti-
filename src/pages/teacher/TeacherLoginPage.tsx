@@ -76,35 +76,38 @@ export const TeacherLoginPage: React.FC = () => {
   return (
     <div className="min-h-[80vh] flex items-center justify-center py-10 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md">
-        <div className="bg-white border border-[#1B2A4A]/15 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-[#ECE7F5] rounded-2xl shadow-xs overflow-hidden">
           {/* Header Banner */}
-          <div className="bg-[#1B2A4A] px-6 py-7 text-white text-center relative border-b border-[#253963]">
-            <div className="w-12 h-12 rounded-lg bg-[#24375F] border border-[#D4AF37]/50 mx-auto flex items-center justify-center text-[#D4AF37] mb-3 shadow-inner">
+          <div
+            className="px-6 py-7 text-white text-center relative"
+            style={{ background: 'linear-gradient(135deg, #3E2072, #5B2E9E)' }}
+          >
+            <div className="w-12 h-12 rounded-xl bg-white/10 mx-auto flex items-center justify-center text-[#F5A8C6] mb-3 shadow-xs">
               <Award className="w-6 h-6" />
             </div>
-            <h1 className="font-serif-heading text-2xl font-bold text-white tracking-wide">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-wide">
               Teacher & Admin Portal
             </h1>
-            <p className="text-xs text-[#A0AEC0] mt-1">
+            <p className="text-xs text-purple-200 mt-1">
               Faculty login for exam authoring, candidate management & analytics
             </p>
           </div>
 
           <div className="p-6 sm:p-8 space-y-6">
             {errorMessage && (
-              <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5">
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
-                <div className="leading-relaxed">{errorMessage}</div>
+                <div className="leading-relaxed font-medium">{errorMessage}</div>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[#1B2A4A] mb-1.5">
+                <label className="block text-xs font-bold text-[#241748] mb-1.5">
                   Official Email Address
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#9B93A8]">
                     <Mail className="w-4 h-4" />
                   </div>
                   <input
@@ -113,17 +116,17 @@ export const TeacherLoginPage: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="teacher@dikjyoti.org"
-                    className="w-full pl-9 pr-3 py-2.5 text-sm bg-[#F8F7F4] border border-slate-300 rounded-lg text-[#1B2A4A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B2A4A] focus:border-transparent transition-all"
+                    className="w-full pl-9 pr-3 py-2.5 text-xs sm:text-sm bg-[#FAF9FD] border border-[#ECE7F5] rounded-xl text-[#241748] placeholder-[#B5AFBF] focus:outline-none focus:ring-2 focus:ring-[#5B2E9E] focus:border-transparent transition-all"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#1B2A4A] mb-1.5">
+                <label className="block text-xs font-bold text-[#241748] mb-1.5">
                   Password
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#9B93A8]">
                     <Lock className="w-4 h-4" />
                   </div>
                   <input
@@ -132,12 +135,12 @@ export const TeacherLoginPage: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-9 pr-10 py-2.5 text-sm bg-[#F8F7F4] border border-slate-300 rounded-lg text-[#1B2A4A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B2A4A] focus:border-transparent transition-all"
+                    className="w-full pl-9 pr-10 py-2.5 text-xs sm:text-sm bg-[#FAF9FD] border border-[#ECE7F5] rounded-xl text-[#241748] placeholder-[#B5AFBF] focus:outline-none focus:ring-2 focus:ring-[#5B2E9E] focus:border-transparent transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#9B93A8] hover:text-[#241748] focus:outline-none"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -147,35 +150,35 @@ export const TeacherLoginPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#D4AF37] hover:bg-[#c4a12f] text-[#1B2A4A] text-sm font-bold rounded-lg transition-colors shadow-sm disabled:opacity-60"
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#3E2072] hover:bg-[#341b60] text-white text-xs sm:text-sm font-bold rounded-xl transition-colors shadow-xs disabled:opacity-60 cursor-pointer"
               >
                 {submitting ? (
-                  <div className="w-4 h-4 border-2 border-[#1B2A4A]/30 border-t-[#1B2A4A] rounded-full animate-spin"></div>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 ) : (
                   <>
                     <span>Enter Teacher Portal</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-4 h-4 text-[#F5A8C6]" />
                   </>
                 )}
               </button>
             </form>
 
-            <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-3 text-xs text-center">
-              <p className="text-[#5A6B82]">
+            <div className="pt-4 border-t border-[#F0EDF7] flex flex-col items-center gap-3 text-xs text-center">
+              <p className="text-[#6B5E82]">
                 New teacher or need to register?{' '}
                 <Link
                   to="/teacher/signup"
-                  className="font-bold text-[#1B2A4A] hover:text-[#D4AF37] underline transition-colors"
+                  className="font-bold text-[#5B2E9E] hover:text-[#3E2072] underline transition-colors"
                 >
                   Faculty Sign-Up (Passcode)
                 </Link>
               </p>
 
-              <p className="text-slate-400">
+              <p className="text-[#9B93A8]">
                 Are you a candidate or student?{' '}
                 <Link
                   to="/student/login"
-                  className="font-semibold text-[#5A6B82] hover:text-[#1B2A4A] transition-colors"
+                  className="font-semibold text-[#5B2E9E] hover:text-[#3E2072] transition-colors"
                 >
                   Student Portal →
                 </Link>

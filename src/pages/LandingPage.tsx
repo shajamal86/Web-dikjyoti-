@@ -190,6 +190,17 @@ export const LandingPage: React.FC = () => {
           <p className="text-[11px] text-[#9B93A8] mt-0.5">Real-time ranks and peer comparison</p>
         </div>
       </div>
+
+      {/* Teacher / Faculty Access Notice */}
+      <div className="mt-6 text-center text-xs text-[#9B93A8]">
+        <span>Institute Faculty or Staff? </span>
+        <Link
+          to="/teacher/login"
+          className="font-bold text-[#5B2E9E] hover:text-[#3E2072] underline transition-colors"
+        >
+          Teacher / Admin Portal Login →
+        </Link>
+      </div>
     </div>
   );
 };

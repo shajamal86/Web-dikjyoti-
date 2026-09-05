@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, Info } from 'lucide-react';
+import { Phone, Info, ShieldCheck } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   return (
@@ -41,6 +41,13 @@ export const Footer: React.FC = () => {
             <Phone className="w-3.5 h-3.5 text-[#F5A8C6]" />
             <span>6002200319</span>
           </a>
+          <Link
+            to="/teacher/login"
+            className="inline-flex items-center gap-1.5 hover:text-[#F5A8C6] transition-colors font-medium text-xs text-[#C9B8EE]"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-[#F5A8C6]" />
+            <span>Teacher Portal</span>
+          </Link>
         </div>
 
         {/* Copyright */}
