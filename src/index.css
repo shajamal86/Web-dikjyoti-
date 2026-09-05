@@ -35,3 +35,19 @@
   }
 }
 
+/* Anti-Cheat & Screen Capture / Print Prevention */
+@media print {
+  html, body {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}
+
+.exam-secure-shield {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+

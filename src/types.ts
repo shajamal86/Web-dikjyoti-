@@ -273,6 +273,7 @@ export interface StudentExamSession {
   markedForReview: Record<string, boolean>; // questionId -> boolean
   lastSavedAt: number; // epoch ms
   isSubmitted: boolean;
+  securityViolations?: number;
 }
 
 // ==========================================

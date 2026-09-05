@@ -3,7 +3,6 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   ExamDocument,
-  QuestionSetDocument,
   QuestionItem,
   MediumType,
   SubjectType,
@@ -33,9 +32,10 @@ import {
   Loader2,
   RotateCcw,
   ShieldAlert,
+  ShieldCheck,
   Menu,
   X,
-  Sparkles,
+  EyeOff,
 } from 'lucide-react';
 
 export const StudentExamPage: React.FC = () => {
@@ -63,7 +63,7 @@ export const StudentExamPage: React.FC = () => {
   const [answers, setAnswers] = useState<Record<string, OptionKey>>({});
   const [markedForReview, setMarkedForReview] = useState<Record<string, boolean>>({});
 
-  // Countdown timer in seconds for the current active subject
+  // Countdown timer in seconds for current active subject
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
 
   // Sync and UI state
@@ -75,13 +75,115 @@ export const StudentExamPage: React.FC = () => {
   const [showEarlyFinishModal, setShowEarlyFinishModal] = useState(false);
   const [showFinalSubmitModal, setShowFinalSubmitModal] = useState(false);
 
-  // Refs for background intervals and dirty state
+  // Anti-Cheat & Security State
+  const [violationCount, setViolationCount] = useState<number>(0);
+  const [showSecurityWarningModal, setShowSecurityWarningModal] = useState<boolean>(false);
+  const [securityWarningReason, setSecurityWarningReason] = useState<string>('');
+  const [isAutoSubmittedDueToViolation, setIsAutoSubmittedDueToViolation] = useState<boolean>(false);
+  const [isWindowBlurred, setIsWindowBlurred] = useState<boolean>(false);
+
+  // Refs for background intervals, listeners, and dirty state
   const dirtyRef = useRef<boolean>(false);
   const sessionRef = useRef<StudentExamSession | null>(null);
   sessionRef.current = session;
 
   const currentSubjectRef = useRef<SubjectType>(currentSubject);
   currentSubjectRef.current = currentSubject;
+
+  const answersRef = useRef<Record<string, OptionKey>>(answers);
+  answersRef.current = answers;
+
+  const examRef = useRef<ExamDocument | null>(exam);
+  examRef.current = exam;
+
+  const isSubmittingRef = useRef<boolean>(isSubmitting);
+  isSubmittingRef.current = isSubmitting;
+
+  const violationCountRef = useRef<number>(0);
+  const lastViolationTimeRef = useRef<number>(0);
+
+  // Play browser warning alert sound (via Web Audio API)
+  const playWarningBeep = useCallback(() => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch {
+      // AudioContext blocked by browser policy until interaction
+    }
+  }, []);
+
+  // Final auto submit function
+  const handleFinalAutoSubmit = useCallback(
+    async (examDoc: ExamDocument, finalAnswers: Record<string, OptionKey>) => {
+      if (!user?.uid || isSubmittingRef.current) return;
+      isSubmittingRef.current = true;
+      setIsSubmitting(true);
+      try {
+        const res = await submitExamPaper({
+          examId: examDoc.id,
+          studentId: user.uid,
+          studentName: user.displayName || 'Student',
+          studentEmail: user.email || '',
+          medium,
+          answers: finalAnswers,
+        });
+        navigate(`/student/result/${res.result.id}`, { replace: true });
+      } catch (err) {
+        console.error('Auto submission error:', err);
+      }
+    },
+    [user, medium, navigate]
+  );
+
+  // Security violation handler: Strike 1 = Warning Modal, Strike 2 = Immediate Auto-Submit
+  const handleSecurityViolation = useCallback(
+    (reason: string) => {
+      if (isSubmittingRef.current || !examRef.current || loading) return;
+
+      const now = Date.now();
+      // Debounce so a single blur+visibility change counts as 1 strike, not 2
+      if (now - lastViolationTimeRef.current < 3500) return;
+      lastViolationTimeRef.current = now;
+
+      const nextCount = violationCountRef.current + 1;
+      violationCountRef.current = nextCount;
+      setViolationCount(nextCount);
+
+      // Audio alarm and device vibration
+      playWarningBeep();
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate([300, 150, 300]);
+        } catch {}
+      }
+
+      if (nextCount === 1) {
+        // Strike 1: High-alert Warning Modal
+        setSecurityWarningReason(reason);
+        setShowSecurityWarningModal(true);
+      } else if (nextCount >= 2) {
+        // Strike 2: Automatic Paper Submission immediately!
+        setShowSecurityWarningModal(false);
+        setIsAutoSubmittedDueToViolation(true);
+        if (examRef.current) {
+          handleFinalAutoSubmit(examRef.current, answersRef.current);
+        }
+      }
+    },
+    [loading, playWarningBeep, handleFinalAutoSubmit]
+  );
 
   // 1. Initial Load: Check if already completed, fetch questions and restore session
   useEffect(() => {
@@ -164,7 +266,7 @@ export const StudentExamPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [examId, user?.uid, medium, navigate]);
+  }, [examId, user?.uid, medium, navigate, handleFinalAutoSubmit]);
 
   // 2. Real-Time Elapsed Wall-Clock Countdown Timer
   useEffect(() => {
@@ -212,6 +314,115 @@ export const StudentExamPage: React.FC = () => {
     return () => clearInterval(syncInterval);
   }, [session]);
 
+  // 4. Anti-Cheat & Screen Protection Listeners (Tab close, Tab switch, Google Circle to Search, Screenshot tools)
+  useEffect(() => {
+    if (!exam || isSubmitting || loading) return;
+
+    // A. Intercept tab closing or browser navigation
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = 'Live examination in progress! Leaving or closing this tab will cause automatic submission.';
+      return e.returnValue;
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // B. Visibility change (Tab switch, minimizing browser, split screen, Google Circle to Search overlay)
+    const handleVisibilityChange = () => {
+      if (document.hidden || document.visibilityState === 'hidden') {
+        setIsWindowBlurred(true);
+        handleSecurityViolation('Tab switch / Google Circle to Search / Background app detected');
+      } else {
+        setIsWindowBlurred(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // C. Window blur / focus (Screen capture overlay, Google Circle to Search, floating apps, alt-tab)
+    const handleWindowBlur = () => {
+      setIsWindowBlurred(true);
+      handleSecurityViolation('Window unfocused / Google Circle to Search / Screen capture overlay detected');
+    };
+
+    const handleWindowFocus = () => {
+      setIsWindowBlurred(false);
+    };
+
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
+
+    // D. Anti-Screenshot & Keyboard shortcuts interception
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // PrintScreen key
+      if (e.key === 'PrintScreen' || e.code === 'PrintScreen') {
+        e.preventDefault();
+        try {
+          navigator.clipboard?.writeText('');
+        } catch {}
+        handleSecurityViolation('Screenshot attempt (PrintScreen key detected)');
+        return;
+      }
+
+      // F12 developer tools
+      if (e.key === 'F12') {
+        e.preventDefault();
+        handleSecurityViolation('Developer inspection tools (F12) are blocked');
+        return;
+      }
+
+      if (e.ctrlKey || e.metaKey) {
+        const key = e.key.toLowerCase();
+        if (['c', 'x', 'v', 'u', 's', 'p'].includes(key)) {
+          e.preventDefault();
+          if (key === 'c' || key === 'x') {
+            handleSecurityViolation('Copy / Cut action blocked');
+          } else if (key === 'p') {
+            handleSecurityViolation('Print / PDF export action blocked');
+          }
+          return;
+        }
+        if (e.shiftKey && ['i', 'j', 'c'].includes(key)) {
+          e.preventDefault();
+          handleSecurityViolation('Developer inspection tools are blocked');
+          return;
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    // E. Disable right-click context menu
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    // F. Prevent copy, cut, paste, and drag
+    const handleCopyCut = (e: ClipboardEvent) => {
+      e.preventDefault();
+      try {
+        e.clipboardData?.setData('text/plain', '');
+      } catch {}
+    };
+    document.addEventListener('copy', handleCopyCut);
+    document.addEventListener('cut', handleCopyCut);
+
+    const handleDragStart = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    document.addEventListener('dragstart', handleDragStart);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('copy', handleCopyCut);
+      document.removeEventListener('cut', handleCopyCut);
+      document.removeEventListener('dragstart', handleDragStart);
+    };
+  }, [exam, isSubmitting, loading, handleSecurityViolation]);
+
   // Subject expiration handler: lock current subject and advance to next
   const handleSubjectTimeExpired = useCallback(async () => {
     const currentSubj = currentSubjectRef.current;
@@ -256,7 +467,7 @@ export const StudentExamPage: React.FC = () => {
       // Last subject (GK) expired -> Auto-submit final paper!
       await handleFinalAutoSubmit(exam, sess.answers);
     }
-  }, [exam]);
+  }, [exam, handleFinalAutoSubmit]);
 
   // Early finish handler for current subject
   const handleEarlyFinishSubject = async () => {
@@ -316,7 +527,6 @@ export const StudentExamPage: React.FC = () => {
       };
       setSession(updated);
 
-      // Instant local persistence
       try {
         localStorage.setItem(
           `dikjyoti_exam_session_${session.studentId}_${session.examId}_${session.medium}`,
@@ -395,25 +605,6 @@ export const StudentExamPage: React.FC = () => {
     }
   };
 
-  // Final auto submit when time expires across all subjects
-  const handleFinalAutoSubmit = async (examDoc: ExamDocument, finalAnswers: Record<string, OptionKey>) => {
-    if (!user?.uid) return;
-    setIsSubmitting(true);
-    try {
-      const res = await submitExamPaper({
-        examId: examDoc.id,
-        studentId: user.uid,
-        studentName: user.displayName || 'Student',
-        studentEmail: user.email || '',
-        medium,
-        answers: finalAnswers,
-      });
-      navigate(`/student/result/${res.result.id}`, { replace: true });
-    } catch (err) {
-      console.error('Auto submission error:', err);
-    }
-  };
-
   // Formatting helper for MM:SS
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -421,7 +612,7 @@ export const StudentExamPage: React.FC = () => {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Active question items for the current subject
+  // Active question items for current subject
   const currentQuestions = questionSets[currentSubject] || [];
   const currentQuestion = currentQuestions[currentQuestionIndex];
 
@@ -432,11 +623,11 @@ export const StudentExamPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="w-10 h-10 animate-spin text-[#D4AF37]" />
-        <h2 className="text-lg font-serif-heading font-bold text-[#1B2A4A]">
+        <Loader2 className="w-10 h-10 animate-spin text-[#5B2E9E]" />
+        <h2 className="text-lg font-bold text-[#241748]">
           Loading Examination Portal...
         </h2>
-        <p className="text-xs text-slate-500">Restoring timed session & syncing question papers</p>
+        <p className="text-xs text-[#6B5E82]">Restoring timed session & syncing question papers</p>
       </div>
     );
   }
@@ -444,17 +635,17 @@ export const StudentExamPage: React.FC = () => {
   if (pageError || !exam) {
     return (
       <div className="max-w-xl mx-auto px-4 py-16 text-center space-y-4">
-        <div className="w-14 h-14 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto">
+        <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
           <AlertCircle className="w-7 h-7" />
         </div>
-        <h2 className="text-xl font-bold font-serif-heading text-[#1B2A4A]">
+        <h2 className="text-xl font-bold text-[#241748]">
           Unable to Access Examination
         </h2>
-        <p className="text-sm text-slate-600 leading-relaxed">{pageError}</p>
+        <p className="text-xs sm:text-sm text-[#6B5E82] leading-relaxed">{pageError}</p>
         <div className="pt-4">
           <button
             onClick={() => navigate('/student/home')}
-            className="px-5 py-2.5 bg-[#1B2A4A] text-white text-xs font-semibold rounded-lg hover:bg-[#253963] transition-colors"
+            className="px-5 py-2.5 bg-[#3E2072] text-white text-xs font-bold rounded-xl hover:bg-[#341b60] transition-colors shadow-xs"
           >
             Return to Dashboard
           </button>
@@ -468,31 +659,75 @@ export const StudentExamPage: React.FC = () => {
   const isTimeCritical = remainingSeconds < 60; // less than 1 min
 
   return (
-    <div className="min-h-screen bg-[#F8F7F4] flex flex-col selection:bg-[#D4AF37]/20">
+    <div className="min-h-screen bg-[#F3EFFA] flex flex-col exam-secure-shield relative select-none">
+      {/* Dynamic Security Watermark (Candidate Name & ID Diagonal Grid) */}
+      <div
+        className="fixed inset-0 pointer-events-none select-none z-10 overflow-hidden flex flex-wrap items-center justify-around gap-20 opacity-[0.03] text-xs font-mono font-bold uppercase rotate-[-22deg] text-[#241748]"
+        aria-hidden="true"
+      >
+        {Array.from({ length: 40 }).map((_, i) => (
+          <span key={i} className="whitespace-nowrap">
+            DIKJYOTI EXAM • {user?.displayName || 'CANDIDATE'} • {user?.uid?.slice(0, 8)}
+          </span>
+        ))}
+      </div>
+
+      {/* Proctor Screen Shield (Active when window loses focus, Google Circle to Search overlay, or screenshot tools) */}
+      {isWindowBlurred && !showSecurityWarningModal && !isAutoSubmittedDueToViolation && (
+        <div className="fixed inset-0 z-50 bg-[#241748]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center text-white select-none">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/20 border border-red-400 flex items-center justify-center text-red-400 mb-4 animate-pulse">
+            <EyeOff className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-extrabold text-white mb-2">
+            Proctor Screen Protection Active
+          </h2>
+          <p className="text-xs sm:text-sm text-[#F5A8C6] max-w-md leading-relaxed mb-4">
+            Examination window lost focus. Google Circle to Search, screen capture overlays, and background apps are strictly blocked.
+          </p>
+          <div className="px-5 py-2.5 rounded-xl bg-white/10 text-xs font-bold text-white border border-white/20 animate-pulse">
+            Click here to return to the active test window
+          </div>
+        </div>
+      )}
+
       {/* Top Test Header Bar */}
-      <header className="sticky top-0 z-40 bg-[#1B2A4A] text-white border-b border-[#253963] shadow-md px-4 sm:px-6 py-3">
+      <header className="sticky top-0 z-40 bg-[#3E2072] text-white border-b border-[#5B2E9E] shadow-sm px-4 sm:px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           {/* Left: Exam title and medium badge */}
           <div className="flex items-center gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-serif-heading font-bold text-sm sm:text-base text-white truncate max-w-xs sm:max-w-md">
+                <h1 className="font-extrabold text-sm sm:text-base text-white truncate max-w-xs sm:max-w-md">
                   {exam.title}
                 </h1>
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F5A8C6]/20 text-[#F5A8C6] border border-[#F5A8C6]/30">
                   {MEDIUM_LABELS[medium]}
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-300 mt-0.5">
+              <div className="flex items-center gap-2 text-[11px] text-[#C9B8EE] mt-0.5">
                 <span>Subject: <strong className="text-white">{SUBJECT_LABELS[currentSubject]}</strong></span>
                 <span>•</span>
-                <span>Order: Math → Reasoning → Hindi → GK</span>
+                <span>Sequence: Math → Reasoning → Hindi → GK</span>
               </div>
             </div>
           </div>
 
-          {/* Center/Right: Timer & Submit Button */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          {/* Center/Right: Anti-Cheat Status, Timer & Submit Button */}
+          <div className="flex items-center gap-2.5 sm:gap-4">
+            {/* Anti-Cheat Proctor Indicator */}
+            <div
+              className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                violationCount > 0
+                  ? 'bg-red-500/20 text-red-200 border-red-400'
+                  : 'bg-[#5B2E9E] text-[#F5A8C6] border-[#7C4FD1]'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+              <span>
+                {violationCount === 0 ? 'Proctor Active' : `Warning: ${violationCount}/2 Strikes`}
+              </span>
+            </div>
+
             {/* Real-Time Countdown Timer */}
             <div
               className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border font-mono font-bold text-sm sm:text-base transition-colors shadow-inner ${
@@ -500,10 +735,10 @@ export const StudentExamPage: React.FC = () => {
                   ? 'bg-red-500/20 text-red-300 border-red-400 animate-pulse'
                   : isTimeLow
                   ? 'bg-amber-500/20 text-amber-300 border-amber-400'
-                  : 'bg-black/30 text-[#D4AF37] border-[#D4AF37]/40'
+                  : 'bg-black/30 text-[#F5A8C6] border-[#F5A8C6]/30'
               }`}
             >
-              <Clock className="w-4 h-4 text-[#D4AF37]" />
+              <Clock className="w-4 h-4 text-[#F5A8C6]" />
               <span>{formatTime(remainingSeconds)}</span>
             </div>
 
@@ -511,7 +746,7 @@ export const StudentExamPage: React.FC = () => {
             <button
               onClick={() => setShowFinalSubmitModal(true)}
               disabled={isSubmitting}
-              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-[#2C9A5B] hover:bg-[#25824c] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               {isSubmitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -525,7 +760,7 @@ export const StudentExamPage: React.FC = () => {
             {/* Mobile Palette Toggle */}
             <button
               onClick={() => setShowPaletteMobile(!showPaletteMobile)}
-              className="lg:hidden p-2 rounded-lg bg-white/10 text-white hover:bg-white/15"
+              className="lg:hidden p-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
               title="Toggle Question Palette"
             >
               {showPaletteMobile ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -535,32 +770,31 @@ export const StudentExamPage: React.FC = () => {
       </header>
 
       {/* Subject Sequence Navigation Strip */}
-      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2.5">
+      <div className="bg-white border-b border-[#ECE7F5] px-4 sm:px-6 py-2.5">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Subject Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
             {EXAM_SUBJECTS.map((subj, idx) => {
               const isActive = currentSubject === subj;
               const isDone = session?.completedSubjects.includes(subj);
-              const isLocked = isDone || EXAM_SUBJECTS.indexOf(currentSubject) < idx;
 
               return (
                 <div
                   key={subj}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                     isActive
-                      ? 'bg-[#1B2A4A] text-white shadow-xs'
+                      ? 'bg-[#3E2072] text-white shadow-xs'
                       : isDone
-                      ? 'bg-slate-100 text-slate-400 line-through'
-                      : 'bg-slate-50 text-slate-600 border border-slate-200'
+                      ? 'bg-[#F3EFFA] text-[#9B93A8] line-through'
+                      : 'bg-white text-[#6B5E82] border border-[#ECE7F5]'
                   }`}
                 >
                   <span>{idx + 1}. {SUBJECT_LABELS[subj]}</span>
                   {isActive && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span className="w-2 h-2 rounded-full bg-[#F5A8C6] animate-pulse"></span>
                   )}
                   {isDone && (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#2C9A5B]" />
                   )}
                 </div>
               );
@@ -572,10 +806,10 @@ export const StudentExamPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowEarlyFinishModal(true)}
-              className="inline-flex items-center gap-1.5 text-xs text-[#1B2A4A] hover:text-[#253963] font-semibold py-1 px-2.5 rounded-md border border-slate-300 hover:border-slate-400 transition-colors bg-slate-50"
+              className="inline-flex items-center gap-1.5 text-xs text-[#5B2E9E] hover:text-[#3E2072] font-bold py-1 px-3 rounded-xl border border-[#EDE1FA] bg-[#FAF6FF] transition-colors cursor-pointer"
             >
               <span>{isLastSubject ? 'Finish Exam Early' : `Finish ${SUBJECT_LABELS[currentSubject]} Early`}</span>
-              <ChevronRight className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <ChevronRight className="w-3.5 h-3.5 text-[#5B2E9E]" />
             </button>
           </div>
         </div>
@@ -586,28 +820,28 @@ export const StudentExamPage: React.FC = () => {
         {/* Center: Question Area (Columns 1-3) */}
         <div className="lg:col-span-3 space-y-4">
           {currentQuestions.length === 0 ? (
-            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs">
-              <HelpCircle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <h3 className="font-serif-heading text-lg font-bold text-[#1B2A4A]">
+            <div className="bg-white rounded-2xl border border-[#ECE7F5] p-12 text-center shadow-xs">
+              <HelpCircle className="w-10 h-10 text-[#9B93A8] mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-[#241748]">
                 No questions authored for {SUBJECT_LABELS[currentSubject]} in this medium.
               </h3>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-[#6B5E82] mt-1">
                 You can advance to the next subject using the button above.
               </p>
             </div>
           ) : currentQuestion ? (
-            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-6 sm:p-8 space-y-6">
+            <div className="bg-white rounded-2xl border border-[#ECE7F5] shadow-xs p-6 sm:p-8 space-y-6">
               {/* Question Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center justify-between pb-4 border-b border-[#F0EDF7]">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <span className="text-xs font-extrabold text-[#5B2E9E] uppercase tracking-wider">
                     Question {currentQuestionIndex + 1} of {currentQuestions.length}
                   </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF6FF] text-[#5B2E9E] border border-[#EDE1FA]">
                     +{currentQuestion.marks} Mark{currentQuestion.marks > 1 ? 's' : ''}
                   </span>
                   {currentQuestion.hasNegativeMarking && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-100">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-100">
                       -{currentQuestion.negativeMarks} Neg
                     </span>
                   )}
@@ -617,10 +851,10 @@ export const StudentExamPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleToggleReview(currentQuestion.id)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
                       markedForReview[currentQuestion.id]
-                        ? 'bg-purple-100 text-purple-800 border border-purple-300'
-                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                        ? 'bg-[#EDE1FA] text-[#5B2E9E] border border-[#5B2E9E]/40'
+                        : 'bg-white text-[#6B5E82] hover:bg-[#FAF6FF] border border-[#ECE7F5]'
                     }`}
                   >
                     <Bookmark className="w-3.5 h-3.5" />
@@ -631,24 +865,24 @@ export const StudentExamPage: React.FC = () => {
 
               {/* Question Text */}
               <div className="space-y-4">
-                <div className="text-base sm:text-lg font-medium text-[#1B2A4A] leading-relaxed select-none">
+                <div className="text-base sm:text-lg font-bold text-[#241748] leading-relaxed select-none">
                   {currentQuestion.text}
                 </div>
 
                 {/* Optional Question Image */}
                 {currentQuestion.imageUrl && (
-                  <div className="p-2 border border-slate-200 rounded-xl bg-slate-50 inline-block max-w-full">
+                  <div className="p-2 border border-[#ECE7F5] rounded-2xl bg-[#FAF6FF] inline-block max-w-full">
                     <img
                       src={currentQuestion.imageUrl}
                       alt="Question Reference"
-                      className="max-h-72 object-contain rounded-lg"
+                      className="max-h-72 object-contain rounded-xl"
                       referrerPolicy="no-referrer"
                     />
                   </div>
                 )}
               </div>
 
-              {/* 4 Options — Neutral Selected Styling (No Right/Wrong Clues) */}
+              {/* 4 Options — Clean Selected Styling */}
               <div className="space-y-3 pt-2">
                 {(['a', 'b', 'c', 'd'] as OptionKey[]).map((optKey) => {
                   const opt = currentQuestion.options[optKey];
@@ -660,18 +894,18 @@ export const StudentExamPage: React.FC = () => {
                       type="button"
                       key={optKey}
                       onClick={() => handleSelectOption(currentQuestion.id, optKey)}
-                      className={`w-full p-4 rounded-xl border text-left transition-all flex items-start gap-3.5 ${
+                      className={`w-full p-4 rounded-xl border text-left transition-all flex items-start gap-3.5 cursor-pointer ${
                         isSelected
-                          ? 'border-[#1B2A4A] bg-[#1B2A4A]/5 ring-2 ring-[#1B2A4A]/25'
-                          : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50'
+                          ? 'border-[#5B2E9E] bg-[#FAF6FF] ring-2 ring-[#5B2E9E]/25'
+                          : 'border-[#ECE7F5] hover:border-[#5B2E9E]/40 bg-white hover:bg-[#FAF9FD]'
                       }`}
                     >
                       {/* Radio Circle */}
                       <div
                         className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold transition-colors ${
                           isSelected
-                            ? 'bg-[#1B2A4A] text-white'
-                            : 'border border-slate-300 text-slate-500'
+                            ? 'bg-[#5B2E9E] text-white shadow-xs'
+                            : 'border border-[#ECE7F5] bg-slate-50 text-[#6B5E82]'
                         }`}
                       >
                         {optKey.toUpperCase()}
@@ -679,14 +913,14 @@ export const StudentExamPage: React.FC = () => {
 
                       {/* Option Text and Image */}
                       <div className="flex-1 space-y-2">
-                        <div className={`text-sm sm:text-base leading-snug ${isSelected ? 'font-semibold text-[#1B2A4A]' : 'text-slate-800'}`}>
+                        <div className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'font-bold text-[#241748]' : 'text-[#6B5E82]'}`}>
                           {opt.text}
                         </div>
                         {opt.imageUrl && (
                           <img
                             src={opt.imageUrl}
                             alt={`Option ${optKey.toUpperCase()}`}
-                            className="max-h-36 object-contain rounded border border-slate-200 bg-white"
+                            className="max-h-36 object-contain rounded-xl border border-[#ECE7F5] bg-white"
                             referrerPolicy="no-referrer"
                           />
                         )}
@@ -697,13 +931,13 @@ export const StudentExamPage: React.FC = () => {
               </div>
 
               {/* Action Bottom Bar */}
-              <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="pt-4 border-t border-[#F0EDF7] flex flex-wrap items-center justify-between gap-3">
                 <div>
                   {answers[currentQuestion.id] && (
                     <button
                       type="button"
                       onClick={() => handleClearOption(currentQuestion.id)}
-                      className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-600 font-semibold px-2.5 py-1.5 rounded hover:bg-slate-100 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs text-[#9B93A8] hover:text-red-600 font-bold px-3 py-1.5 rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                       <span>Clear Response</span>
@@ -716,7 +950,7 @@ export const StudentExamPage: React.FC = () => {
                     type="button"
                     onClick={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
                     disabled={currentQuestionIndex === 0}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[#ECE7F5] text-xs font-bold text-[#6B5E82] hover:bg-[#FAF6FF] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
                   >
                     <ChevronLeft className="w-4 h-4" />
                     <span>Previous</span>
@@ -728,14 +962,13 @@ export const StudentExamPage: React.FC = () => {
                       if (currentQuestionIndex < currentQuestions.length - 1) {
                         setCurrentQuestionIndex((prev) => prev + 1);
                       } else {
-                        // At the last question of current subject
                         setShowEarlyFinishModal(true);
                       }
                     }}
-                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-[#1B2A4A] hover:bg-[#253963] text-white text-xs font-semibold transition-colors shadow-xs"
+                    className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#3E2072] hover:bg-[#341b60] text-white text-xs font-bold transition-colors shadow-xs cursor-pointer"
                   >
                     <span>{currentQuestionIndex < currentQuestions.length - 1 ? 'Save & Next' : 'Finish Subject'}</span>
-                    <ChevronRight className="w-4 h-4 text-[#D4AF37]" />
+                    <ChevronRight className="w-4 h-4 text-[#F5A8C6]" />
                   </button>
                 </div>
               </div>
@@ -749,13 +982,13 @@ export const StudentExamPage: React.FC = () => {
             showPaletteMobile ? 'block' : 'hidden lg:block'
           }`}
         >
-          <div className="absolute right-0 top-0 bottom-0 w-80 lg:w-full bg-white lg:rounded-2xl border-l lg:border border-slate-200 p-5 overflow-y-auto space-y-5 shadow-lg lg:shadow-xs">
+          <div className="absolute right-0 top-0 bottom-0 w-80 lg:w-full bg-white lg:rounded-2xl border-l lg:border border-[#ECE7F5] p-5 overflow-y-auto space-y-5 shadow-lg lg:shadow-xs">
             {/* Mobile Palette Header */}
-            <div className="flex lg:hidden items-center justify-between pb-3 border-b border-slate-200">
-              <span className="font-bold text-sm text-[#1B2A4A]">Question Navigator</span>
+            <div className="flex lg:hidden items-center justify-between pb-3 border-b border-[#ECE7F5]">
+              <span className="font-extrabold text-sm text-[#241748]">Question Navigator</span>
               <button
                 onClick={() => setShowPaletteMobile(false)}
-                className="p-1 rounded-md text-slate-500 hover:bg-slate-100"
+                className="p-1.5 rounded-xl text-[#9B93A8] hover:bg-[#FAF6FF]"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -763,30 +996,30 @@ export const StudentExamPage: React.FC = () => {
 
             {/* Subject Indicator in Palette */}
             <div>
-              <div className="text-xs font-bold text-[#1B2A4A] uppercase tracking-wider">
+              <div className="text-xs font-extrabold text-[#241748] uppercase tracking-wider">
                 {SUBJECT_LABELS[currentSubject]} Palette
               </div>
-              <div className="text-xs text-slate-500 mt-0.5">
+              <div className="text-xs text-[#6B5E82] mt-0.5 font-medium">
                 {answeredInSubj} of {currentQuestions.length} Answered
               </div>
             </div>
 
             {/* Palette Legend */}
-            <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-[#6B5E82] p-3 bg-[#FAF6FF] rounded-xl border border-[#EDE1FA]">
               <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-[#1B2A4A]"></span>
-                <span>Answered</span>
+                <span className="w-3.5 h-3.5 rounded-md bg-[#3E2072]"></span>
+                <span className="font-bold">Answered</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-white border border-slate-300"></span>
+                <span className="w-3.5 h-3.5 rounded-md bg-white border border-[#ECE7F5]"></span>
                 <span>Unattempted</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-purple-200 border border-purple-400"></span>
+                <span className="w-3.5 h-3.5 rounded-md bg-[#EDE1FA] border border-[#5B2E9E]"></span>
                 <span>Marked Review</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded ring-2 ring-[#D4AF37] bg-white"></span>
+                <span className="w-3.5 h-3.5 rounded-md ring-2 ring-[#F5A8C6] bg-white"></span>
                 <span>Current</span>
               </div>
             </div>
@@ -798,14 +1031,14 @@ export const StudentExamPage: React.FC = () => {
                 const isMarkedReview = Boolean(markedForReview[q.id]);
                 const isCurrent = currentQuestionIndex === idx;
 
-                let btnStyle = 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50';
+                let btnStyle = 'bg-white border-[#ECE7F5] text-[#6B5E82] hover:bg-[#FAF6FF]';
 
                 if (isSelectedAnswer && isMarkedReview) {
-                  btnStyle = 'bg-purple-800 text-white border-purple-900';
+                  btnStyle = 'bg-[#5B2E9E] text-white border-[#5B2E9E]';
                 } else if (isSelectedAnswer) {
-                  btnStyle = 'bg-[#1B2A4A] text-white border-[#1B2A4A]';
+                  btnStyle = 'bg-[#3E2072] text-white border-[#3E2072]';
                 } else if (isMarkedReview) {
-                  btnStyle = 'bg-purple-100 text-purple-900 border-purple-300';
+                  btnStyle = 'bg-[#EDE1FA] text-[#5B2E9E] border-[#5B2E9E]';
                 }
 
                 return (
@@ -816,13 +1049,13 @@ export const StudentExamPage: React.FC = () => {
                       setCurrentQuestionIndex(idx);
                       setShowPaletteMobile(false);
                     }}
-                    className={`h-9 rounded-lg font-bold text-xs border transition-all flex items-center justify-center relative ${btnStyle} ${
-                      isCurrent ? 'ring-2 ring-[#D4AF37] ring-offset-1 font-extrabold' : ''
+                    className={`h-9 rounded-xl font-bold text-xs border transition-all flex items-center justify-center relative cursor-pointer ${btnStyle} ${
+                      isCurrent ? 'ring-2 ring-[#F5A8C6] ring-offset-1 font-extrabold shadow-xs' : ''
                     }`}
                   >
                     <span>{idx + 1}</span>
                     {isMarkedReview && !isSelectedAnswer && (
-                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#5B2E9E]"></span>
                     )}
                   </button>
                 );
@@ -830,9 +1063,9 @@ export const StudentExamPage: React.FC = () => {
             </div>
 
             {/* Sync status footer indicator */}
-            <div className="pt-4 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
+            <div className="pt-4 border-t border-[#F0EDF7] text-[11px] text-[#9B93A8] flex items-center justify-between">
               <span>Sync status:</span>
-              <span className="flex items-center gap-1 text-emerald-600 font-medium">
+              <span className="flex items-center gap-1 text-[#2C9A5B] font-bold">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>{isSyncing ? 'Syncing...' : 'Encrypted & Saved'}</span>
               </span>
@@ -841,19 +1074,90 @@ export const StudentExamPage: React.FC = () => {
         </div>
       </main>
 
+      {/* STRIKE 1: Security Warning Modal */}
+      {showSecurityWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 sm:p-7 shadow-2xl border-2 border-red-500 space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-red-100 border border-red-200 text-red-600 flex items-center justify-center mx-auto shadow-inner">
+              <ShieldAlert className="w-8 h-8 animate-bounce" />
+            </div>
+
+            <div className="text-center">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-extrabold uppercase tracking-wider mb-2">
+                <span>⚠️ Security Violation: Strike 1 of 2</span>
+              </div>
+              <h3 className="text-xl font-extrabold text-[#241748]">
+                Unauthorized Activity Detected!
+              </h3>
+              <p className="text-xs text-red-600 font-bold mt-1">
+                {securityWarningReason || 'Tab switch / Google Circle to Search / Screen capture overlay'}
+              </p>
+            </div>
+
+            <div className="p-4 bg-red-50/90 border border-red-200 rounded-xl space-y-2 text-xs text-red-900 leading-relaxed">
+              <p className="font-bold">
+                Proctor Warning: Leaving this examination window, switching tabs, capturing screenshots, or using Google Circle to Search is strictly prohibited.
+              </p>
+              <p>
+                ⚠️ <strong>THIS IS YOUR FIRST AND FINAL WARNING!</strong> If any other suspicious activity is detected, your exam paper will be <strong>AUTOMATICALLY SUBMITTED IMMEDIATELY</strong> with your current answers.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSecurityWarningModal(false)}
+                className="w-full py-3 px-4 bg-[#3E2072] hover:bg-[#341b60] text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                I Understand — Return to Examination
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* STRIKE 2: Auto-Submit Notice Overlay */}
+      {isAutoSubmittedDueToViolation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 sm:p-7 shadow-2xl border-2 border-red-600 text-center space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-red-100 border border-red-300 text-red-600 flex items-center justify-center mx-auto">
+              <AlertCircle className="w-9 h-9" />
+            </div>
+
+            <div>
+              <span className="px-3 py-1 rounded-full bg-red-600 text-white text-xs font-extrabold uppercase tracking-wider">
+                Strike 2 of 2: Disqualified & Auto-Submitted
+              </span>
+              <h3 className="text-xl font-extrabold text-[#241748] mt-3">
+                Exam Automatically Submitted
+              </h3>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                Repeated unauthorized activity was detected (Tab switch / Google Circle to Search / Screen capture overlay).
+                As per examination regulations, your paper has been automatically submitted.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 text-xs text-[#5B2E9E] font-semibold pt-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Submitting answers and calculating official scorecard...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Early Finish Confirmation Modal */}
       {showEarlyFinishModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#ECE7F5] space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto">
               <ShieldAlert className="w-6 h-6" />
             </div>
 
             <div className="text-center">
-              <h3 className="text-lg font-bold font-serif-heading text-[#1B2A4A]">
+              <h3 className="text-lg font-bold text-[#241748]">
                 Finish {SUBJECT_LABELS[currentSubject]} Early?
               </h3>
-              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+              <p className="text-xs text-[#6B5E82] mt-2 leading-relaxed">
                 Once confirmed, <strong>{SUBJECT_LABELS[currentSubject]} will be permanently locked</strong> and you cannot return to modify any answers.
               </p>
               <div className="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 font-medium">
@@ -865,14 +1169,14 @@ export const StudentExamPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowEarlyFinishModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100"
+                className="px-4 py-2 text-xs font-bold text-[#6B5E82] hover:text-[#241748] rounded-xl hover:bg-[#FAF6FF]"
               >
                 Keep Answering
               </button>
               <button
                 type="button"
                 onClick={handleEarlyFinishSubject}
-                className="px-5 py-2 bg-[#1B2A4A] hover:bg-[#253963] text-white text-xs font-semibold rounded-lg shadow-xs"
+                className="px-5 py-2 bg-[#3E2072] hover:bg-[#341b60] text-white text-xs font-bold rounded-xl shadow-xs"
               >
                 Yes, Lock & Proceed
               </button>
@@ -884,27 +1188,27 @@ export const StudentExamPage: React.FC = () => {
       {/* Final Paper Submit Confirmation Modal */}
       {showFinalSubmitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center mx-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#ECE7F5] space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center mx-auto">
               <Send className="w-6 h-6" />
             </div>
 
             <div className="text-center">
-              <h3 className="text-lg font-bold font-serif-heading text-[#1B2A4A]">
+              <h3 className="text-lg font-bold text-[#241748]">
                 Final Examination Submission
               </h3>
-              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+              <p className="text-xs text-[#6B5E82] mt-1 leading-relaxed">
                 Are you ready to submit your test paper? Your answers will be securely scored by the server and your official scorecard will be displayed immediately.
               </p>
             </div>
 
             {/* Quick Answer Summary */}
-            <div className="grid grid-cols-2 gap-2 text-xs p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <div className="text-slate-600">
+            <div className="grid grid-cols-2 gap-2 text-xs p-3 bg-[#FAF6FF] rounded-xl border border-[#EDE1FA]">
+              <div className="text-[#6B5E82]">
                 Total Answered: <strong className="text-emerald-700">{Object.keys(answers).length}</strong>
               </div>
-              <div className="text-slate-600">
-                Marked for Review: <strong className="text-purple-700">{Object.keys(markedForReview).filter((k) => markedForReview[k]).length}</strong>
+              <div className="text-[#6B5E82]">
+                Marked for Review: <strong className="text-[#5B2E9E]">{Object.keys(markedForReview).filter((k) => markedForReview[k]).length}</strong>
               </div>
             </div>
 
@@ -913,7 +1217,7 @@ export const StudentExamPage: React.FC = () => {
                 type="button"
                 onClick={() => setShowFinalSubmitModal(false)}
                 disabled={isSubmitting}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100"
+                className="px-4 py-2 text-xs font-bold text-[#6B5E82] hover:text-[#241748] rounded-xl hover:bg-[#FAF6FF]"
               >
                 Return to Exam
               </button>
@@ -921,7 +1225,7 @@ export const StudentExamPage: React.FC = () => {
                 type="button"
                 onClick={handleFinalSubmit}
                 disabled={isSubmitting}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg shadow-xs"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#2C9A5B] hover:bg-[#25824c] text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
               >
                 {isSubmitting ? (
                   <>

@@ -245,9 +245,15 @@ export const Header: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Link
                     to="/student/login"
-                    className="px-4 py-2 text-xs font-bold rounded-xl bg-[#F5A8C6] text-[#3E2072] hover:bg-[#f3b5ce] transition-colors shadow-xs"
+                    className="px-3.5 py-2 text-xs font-bold rounded-xl bg-[#F5A8C6] text-[#3E2072] hover:bg-[#f3b5ce] transition-colors shadow-xs"
                   >
                     Student Login
+                  </Link>
+                  <Link
+                    to="/teacher/login"
+                    className="px-3.5 py-2 text-xs font-bold rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-colors shadow-xs"
+                  >
+                    Teacher Portal
                   </Link>
                 </div>
               )}
@@ -417,6 +423,13 @@ export const Header: React.FC = () => {
                   className="w-full text-center py-2.5 text-xs font-bold rounded-xl bg-[#F5A8C6] text-[#3E2072] shadow-xs"
                 >
                   Student Login
+                </Link>
+                <Link
+                  to="/teacher/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 text-xs font-bold rounded-xl bg-[#5B2E9E] text-white border border-[#7C4FD1] shadow-xs"
+                >
+                  Teacher Portal Login
                 </Link>
                 <Link
                   to="/student/signup"
