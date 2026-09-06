@@ -70,6 +70,8 @@ export const TeacherCreateExamPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newExamTitle, setNewExamTitle] = useState('');
   const [newExamDescription, setNewExamDescription] = useState('');
+  const [creatingExam, setCreatingExam] = useState(false);
+  const [createExamError, setCreateExamError] = useState<string | null>(null);
 
   // Step 1: Medium & Password state
   const [selectedMedium, setSelectedMedium] = useState<MediumType>(urlMedium || 'hindi');
@@ -245,9 +247,12 @@ export const TeacherCreateExamPage: React.FC = () => {
     e.preventDefault();
     if (!user) return;
     if (!newExamTitle.trim()) {
-      alert('Please enter an exam title.');
+      setCreateExamError('Please enter an examination title.');
       return;
     }
+
+    setCreatingExam(true);
+    setCreateExamError(null);
 
     try {
       const created = await createExamDraft(
@@ -261,11 +266,26 @@ export const TeacherCreateExamPage: React.FC = () => {
       setShowCreateModal(false);
       setNewExamTitle('');
       setNewExamDescription('');
+      setCreateExamError(null);
       setSelectedSubject(null);
       setSearchParams({ examId: created.id });
       triggerToast('Exam draft initialized successfully!');
     } catch (err: any) {
-      alert(`Error creating exam: ${err.message}`);
+      console.error('Error creating exam:', err);
+      const isPermissionDenied =
+        err?.message?.includes('permission') ||
+        err?.message?.includes('PERMISSION_DENIED') ||
+        err?.code === 'permission-denied';
+
+      if (isPermissionDenied) {
+        setCreateExamError(
+          'Firebase Permission Denied: Firebase Firestore rules is write ko block kar rahi hain. Agar aapne Firestore ko Test Mode me rakha tha to 30-din ki testing limit expire ho sakti hai. Firebase Console > Firestore Database > Rules me jakar rules update karein.'
+        );
+      } else {
+        setCreateExamError(`Error creating exam: ${err.message || 'Unknown Firestore error'}`);
+      }
+    } finally {
+      setCreatingExam(false);
     }
   };
 
@@ -463,7 +483,18 @@ export const TeacherCreateExamPage: React.FC = () => {
       }, 50);
     } catch (err: any) {
       console.error('Error saving question:', err);
-      setFormError(`Failed to save question: ${err.message}`);
+      const isPermissionDenied =
+        err?.message?.includes('permission') ||
+        err?.message?.includes('PERMISSION_DENIED') ||
+        err?.code === 'permission-denied';
+
+      if (isPermissionDenied) {
+        setFormError(
+          'Firebase Permission Denied: Question save nahi ho paya. Firebase Firestore rules write ko block kar rahi hain. Firebase Console > Firestore Database > Rules me jakar rules update/publish karein.'
+        );
+      } else {
+        setFormError(`Failed to save question: ${err.message || 'Unknown Firestore write error'}`);
+      }
     } finally {
       setSavingQuestion(false);
     }
@@ -699,6 +730,17 @@ export const TeacherCreateExamPage: React.FC = () => {
               <h3 className="font-serif-heading text-lg font-bold text-[#1B2A4A]">
                 Initialize New Examination Paper
               </h3>
+
+              {createExamError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2 leading-relaxed">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Error: </span>
+                    {createExamError}
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={handleCreateNewExam} className="space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-[#1B2A4A] mb-1">
@@ -740,9 +782,13 @@ export const TeacherCreateExamPage: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-[#1B2A4A] hover:bg-[#253963] text-white text-xs font-semibold rounded-lg shadow-sm"
+                    disabled={creatingExam}
+                    className="px-4 py-2 bg-[#1B2A4A] hover:bg-[#253963] disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-2"
                   >
-                    Launch Wizard
+                    {creatingExam && (
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    )}
+                    <span>{creatingExam ? 'Initializing Exam...' : 'Launch Wizard'}</span>
                   </button>
                 </div>
               </form>

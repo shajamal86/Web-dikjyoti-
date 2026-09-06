@@ -17,6 +17,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { AdsterraAdBanner } from '../../components/common/AdsterraAdBanner';
 
 export const StudentLeaderboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -291,6 +292,11 @@ export const StudentLeaderboardPage: React.FC = () => {
                 );
               })
             )}
+          </div>
+
+          {/* Adsterra 300x250 Ad Banner */}
+          <div className="pt-4 flex justify-center">
+            <AdsterraAdBanner />
           </div>
         </>
       )}

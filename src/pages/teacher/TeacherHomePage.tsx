@@ -49,6 +49,7 @@ export const TeacherHomePage: React.FC = () => {
 
   // Quick feedback toast
   const [bannerToast, setBannerToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -58,11 +59,22 @@ export const TeacherHomePage: React.FC = () => {
   const loadExams = async () => {
     if (!user) return;
     setLoading(true);
+    setPermissionError(null);
     try {
       const list = await listTeacherExams(user.uid);
       setExams(list);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching teacher exams:', err);
+      const isPermissionDenied =
+        err?.message?.includes('permission') ||
+        err?.message?.includes('PERMISSION_DENIED') ||
+        err?.code === 'permission-denied';
+
+      if (isPermissionDenied) {
+        setPermissionError(
+          'Firebase Firestore Permission Denied: Firebase Firestore rules read/write ko block kar rahi hain. Agar Firebase Testing mode me tha, to 30 days ki validity expire ho chuki hogi. Niche diye instruction follow karke Firebase Console me rules update karein.'
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -119,6 +131,20 @@ export const TeacherHomePage: React.FC = () => {
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* Permission Error Banner */}
+      {permissionError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-900 flex items-start gap-3 shadow-xs">
+          <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h4 className="font-bold text-red-950 text-sm">Firebase Security Rules Permission Alert</h4>
+            <p className="leading-relaxed">{permissionError}</p>
+            <p className="text-[11px] text-red-700">
+              <strong>Kaise solve karein:</strong> Firebase Console (console.firebase.google.com) me jakar <em>Firestore Database &gt; Rules</em> tab kholein aur updated rules paste karke <strong>Publish</strong> karein.
+            </p>
+          </div>
         </div>
       )}
 

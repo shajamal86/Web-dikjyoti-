@@ -511,6 +511,38 @@ async function startServer() {
     }
   });
 
+  // Serve Service Worker for Monetag ads at root path with proper headers
+  const serveServiceWorker = (req: express.Request, res: express.Response) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
+    res.setHeader('Service-Worker-Allowed', '/');
+    const swPathDist = path.join(process.cwd(), 'dist', 'sw.js');
+    const swPathPublic = path.join(process.cwd(), 'public', 'sw.js');
+    res.sendFile(swPathPublic, (err) => {
+      if (err) {
+        res.sendFile(swPathDist, (err2) => {
+          if (err2) res.status(404).end();
+        });
+      }
+    });
+  };
+
+  app.get('/sw.js', serveServiceWorker);
+  app.get('/service-worker.js', serveServiceWorker);
+
+  // Serve Adsterra 300x250 Banner iframe document
+  app.get('/adsterra-banner.html', (req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+    const bannerPathDist = path.join(process.cwd(), 'dist', 'adsterra-banner.html');
+    const bannerPathPublic = path.join(process.cwd(), 'public', 'adsterra-banner.html');
+    res.sendFile(bannerPathPublic, (err) => {
+      if (err) {
+        res.sendFile(bannerPathDist, (err2) => {
+          if (err2) res.status(404).end();
+        });
+      }
+    });
+  });
+
   // Vite middleware setup
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

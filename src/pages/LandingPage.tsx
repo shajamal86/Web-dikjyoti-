@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { AdsterraAdBanner } from '../components/common/AdsterraAdBanner';
 import {
   GraduationCap,
   BookOpen,
@@ -222,6 +223,11 @@ export const LandingPage: React.FC = () => {
             <ChevronRight className="w-3.5 h-3.5" />
           </Link>
         </div>
+      </div>
+
+      {/* Adsterra 300x250 Ad Banner */}
+      <div className="mt-8 flex justify-center">
+        <AdsterraAdBanner />
       </div>
 
       {/* Trust & Verification Badges */}

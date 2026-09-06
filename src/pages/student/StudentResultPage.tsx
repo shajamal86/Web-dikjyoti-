@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ExamResultDocument, SUBJECT_LABELS, MEDIUM_LABELS, EXAM_SUBJECTS } from '../../types';
 import { getExamResult } from '../../services/studentExamService';
+import { AdsterraAdBanner } from '../../components/common/AdsterraAdBanner';
 import {
   Award,
   CheckCircle2,
@@ -192,6 +193,11 @@ export const StudentResultPage: React.FC = () => {
         >
           Leaderboard
         </Link>
+      </div>
+
+      {/* Adsterra 300x250 Ad Banner */}
+      <div className="py-2 flex justify-center">
+        <AdsterraAdBanner />
       </div>
 
       {/* Detailed Solutions Section */}

@@ -7,6 +7,7 @@ import {
   fetchStudentHistory,
 } from '../../services/studentExamService';
 import { ExamPasswordModal } from '../../components/student/ExamPasswordModal';
+import { AdsterraAdBanner } from '../../components/common/AdsterraAdBanner';
 import {
   BookOpen,
   Clock,
@@ -310,6 +311,11 @@ export const StudentHomePage: React.FC = () => {
             <li><strong>Automatic Synchronization:</strong> Answer selections are saved immediately to ensure responses are preserved across any network interruption.</li>
           </ul>
         </div>
+      </div>
+
+      {/* Adsterra 300x250 Ad Banner */}
+      <div className="pt-2 flex justify-center">
+        <AdsterraAdBanner />
       </div>
 
       {/* Password Modal */}
