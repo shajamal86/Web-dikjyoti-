@@ -2,22 +2,34 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 /**
- * Monetag Real Banner Ad Integration
+ * Monetag Banner Ad Unit
  * 
- * Requirements:
- * 1. Present on every single page except active exam-attempt screen (/student/exam/:examId).
- * 2. Uses real Monetag web ad script/tag (zone configuration).
- * 3. Consistent visual placement in layout without overlapping buttons or forms.
- * 4. Graceful collapse on load failure (zero broken gap).
+ * Strict User Requirement: "only monetag banner ads hii dikhna hei"
+ * Renders ONLY the official Monetag banner publisher tag (Zone 8842145).
+ * Completely omits any custom or simulated sponsor cards.
+ * 
+ * Features:
+ * 1. Appears across the application layout (except during active timed exam attempts).
+ * 2. Re-mounts cleanly on every route transition using refreshTrigger / route hooks.
+ * 3. Mounts the real Monetag publisher script tag (Zone 8842145).
  */
-export const MonetagBannerAd: React.FC = () => {
+
+export interface MonetagBannerAdProps {
+  className?: string;
+  refreshTrigger?: string | number;
+}
+
+let globalAdImpressionCounter = 0;
+
+export const MonetagBannerAd: React.FC<MonetagBannerAdProps> = ({
+  className = '',
+  refreshTrigger,
+}) => {
   const location = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [loadFailed, setLoadFailed] = useState<boolean>(false);
-  const [isRendered, setIsRendered] = useState<boolean>(false);
+  const [adMounted, setAdMounted] = useState<boolean>(false);
 
-  // STRICT REQUIREMENT: The active Exam-Attempt page where student is actively
-  // answering timed questions MUST remain completely free of any ad.
+  // STRICT REQUIREMENT: Active timed student exam attempt screen MUST remain completely distraction-free
   const isExamAttempt = location.pathname.startsWith('/student/exam/');
 
   useEffect(() => {
@@ -25,79 +37,61 @@ export const MonetagBannerAd: React.FC = () => {
       return;
     }
 
-    setLoadFailed(false);
-    setIsRendered(false);
-
+    globalAdImpressionCounter += 1;
     const container = containerRef.current;
     if (!container) return;
 
-    // Reset container contents
+    // Purge previous ad scripts and elements
     container.innerHTML = '';
 
-    // Create ad wrapper container
+    // Create container element for Monetag Banner
     const adWrapper = document.createElement('div');
-    adWrapper.id = `monetag-banner-zone-${Date.now()}`;
-    adWrapper.className = 'w-full flex items-center justify-center min-h-[50px] sm:min-h-[90px]';
+    adWrapper.id = `monetag-banner-${Date.now()}-${globalAdImpressionCounter}`;
+    adWrapper.className = 'w-full flex items-center justify-center min-h-[60px] sm:min-h-[90px]';
 
-    // Inject Monetag real publisher script tag
+    // Official Monetag publisher script tag
     const script = document.createElement('script');
-    script.src = 'https://alwingulla.com/88/tag.min.js';
+    script.src = `https://alwingulla.com/88/tag.min.js?cb=${Date.now()}`;
     script.setAttribute('data-zone', '8842145');
     script.async = true;
     script.setAttribute('data-cfasync', 'false');
 
-    // Handle load success & error
     script.onload = () => {
-      setIsRendered(true);
+      setAdMounted(true);
     };
 
     script.onerror = () => {
-      // Gracefully collapse the container if script is blocked or fails to load
-      setLoadFailed(true);
+      setAdMounted(false);
     };
 
     adWrapper.appendChild(script);
     container.appendChild(adWrapper);
 
-    // Timeout safety: if ad script does not render or is blocked by network/adblocker, collapse smoothly
-    const timeout = setTimeout(() => {
-      if (container) {
-        // Check if any child elements or iframes were generated
-        const hasVisibleAd = container.offsetHeight > 20 || container.querySelector('iframe, img, a, div');
-        if (!hasVisibleAd) {
-          // Keep collapsed if nothing rendered
-          setLoadFailed(true);
-        } else {
-          setIsRendered(true);
-        }
-      }
-    }, 3500);
-
     return () => {
-      clearTimeout(timeout);
       if (container) {
         container.innerHTML = '';
       }
     };
-  }, [location.pathname, isExamAttempt]);
+  }, [location.pathname, location.search, isExamAttempt, refreshTrigger]);
 
-  // Completely omit on active exam attempt or when ad fails to load
-  if (isExamAttempt || loadFailed) {
+  if (isExamAttempt) {
     return null;
   }
 
   return (
-    <div
-      aria-label="Sponsored Advertisement"
-      className="w-full bg-[#F3EFE6]/60 border-t border-b border-[#E5DFD3] transition-all duration-300 py-2.5 px-4 overflow-hidden z-20"
+    <aside
+      aria-label="Advertisement Banner"
+      className={`w-full my-3 px-3 sm:px-6 ${className}`.trim()}
     >
-      <div className="max-w-4xl mx-auto flex flex-col items-center justify-center">
-        {/* Ad container holding Monetag zone script */}
+      <div className="max-w-7xl mx-auto flex justify-center items-center">
+        {/* Real Monetag Banner Ad Container ONLY */}
         <div
           ref={containerRef}
-          className="w-full max-w-[728px] min-h-[50px] sm:min-h-[90px] flex items-center justify-center overflow-hidden"
+          id="monetag-banner-zone-8842145"
+          className="w-full flex items-center justify-center min-h-[50px] sm:min-h-[90px] overflow-hidden"
         />
       </div>
-    </div>
+    </aside>
   );
 };
+

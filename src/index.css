@@ -2,31 +2,51 @@
 
 @layer base {
   :root {
-    --purple-deep: #3E2072;
-    --purple: #5B2E9E;
-    --purple-mid: #7C4FD1;
-    --purple-light: #9B6FE0;
-    --pink: #F5A8C6;
-    --pink-text: #D1467B;
-    --bg: #F3EFFA;
-    --white: #FFFFFF;
-    --ink: #241748;
-    --gray: #9B93A8;
-    --gray-line: #ECE7F5;
+    --primary: #2F6FED;
+    --primary-dark: #1D4FC4;
+    --primary-light: #E8F0FE;
+    --bg: #F5F7FB;
+    --white: #ffffff;
+    --text: #1F2A44;
+    --muted: #8A94A6;
+    --line: #EEF1F6;
+    --green: #16A34A;
+    --green-bg: #E6F9F0;
+    --purple: #8B5CF6;
+    --purple-bg: #F1EAFE;
+    --yellow: #F59E0B;
+    --yellow-bg: #FFF4E0;
+    --pink: #EF4477;
+    --pink-bg: #FDE8ED;
 
-    --font-sans: 'Poppins', sans-serif;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
-  body {
+  html, body {
     font-family: var(--font-sans);
-    background-color: #F3EFFA;
-    color: #241748;
+    background-color: #F5F7FB;
+    color: #1F2A44;
     min-height: 100vh;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-sans);
-    color: #241748;
+    color: #1F2A44;
   }
 
   .font-brand-display {

@@ -18,6 +18,7 @@ import {
   SubjectDurations,
   OptionKey,
   EXAM_SUBJECTS,
+  MEDIUM_LABELS,
 } from '../types';
 
 /**
@@ -113,31 +114,81 @@ export async function verifyExamPassword(
   medium: MediumType,
   password: string
 ): Promise<{ success: boolean; error?: string; examTitle?: string; subjectDurations?: SubjectDurations }> {
-  try {
-    const response = await fetch('/api/exams/verify-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ examId, medium, password }),
-    });
+  const enteredPassword = (password || '').trim();
+  if (!enteredPassword) {
+    return {
+      success: false,
+      error: 'Please enter the medium password provided by your instructor.',
+    };
+  }
 
-    const data = await response.json();
-    if (!response.ok || !data.success) {
+  try {
+    // 1. Fetch the exam document directly using authenticated Firestore client
+    const examRef = doc(db, 'exams', examId);
+    const examSnap = await getDoc(examRef);
+
+    if (!examSnap.exists()) {
       return {
         success: false,
-        error: data.error || 'Password verification failed. Please try again.',
+        error: 'This exam could not be found or has been removed.',
+      };
+    }
+
+    const examData = examSnap.data() as ExamDocument;
+
+    // 2. Validate live status
+    const isLive = examData.status === 'live' || (examData as any).isLive === true;
+    if (!isLive) {
+      return {
+        success: false,
+        error: 'This examination is no longer live.',
+      };
+    }
+
+    // 3. Validate requested language medium
+    const mediumConfig = examData.mediums?.[medium];
+    if (!mediumConfig || !mediumConfig.enabled) {
+      return {
+        success: false,
+        error: `The ${MEDIUM_LABELS[medium] || medium} medium is not enabled for this exam.`,
+      };
+    }
+
+    // 4. Validate passcode
+    const storedPassword = (mediumConfig.password || '').trim();
+    if (storedPassword !== enteredPassword) {
+      return {
+        success: false,
+        error: 'Incorrect password. Please verify the code and try again.',
+      };
+    }
+
+    // 5. Success
+    return {
+      success: true,
+      examTitle: examData.title,
+      subjectDurations: examData.subjectDurations,
+    };
+  } catch (err: any) {
+    console.error('Password verification error detail:', err);
+
+    if (err.code === 'permission-denied') {
+      return {
+        success: false,
+        error: 'Access denied: Please ensure you are logged in to your student account.',
+      };
+    }
+
+    if (err.code === 'unavailable' || !navigator.onLine) {
+      return {
+        success: false,
+        error: 'Network connection failed while verifying password. Please check your internet connection.',
       };
     }
 
     return {
-      success: true,
-      examTitle: data.examTitle,
-      subjectDurations: data.subjectDurations,
-    };
-  } catch (err: any) {
-    console.error('Server password check error:', err);
-    return {
       success: false,
-      error: 'Network connection failed while verifying password. Please check your internet connection.',
+      error: err.message || 'Unable to verify exam password. Please try again.',
     };
   }
 }

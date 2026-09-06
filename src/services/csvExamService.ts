@@ -756,3 +756,9 @@ export function generateTestSampleCsvWithErrors(): string {
 
   return '\uFEFF' + csv;
 }
+
+// Convenience exported aliases matching alternate naming
+export const importValidatedQuestionsToExam = bulkImportQuestionsToExam;
+export const generateQuestionCsvTemplate = generateCsvTemplate;
+export const generateSampleCsvWithIntentionalErrors = generateTestSampleCsvWithErrors;
+

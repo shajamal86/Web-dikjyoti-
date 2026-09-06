@@ -646,8 +646,9 @@ export const StudentExamPage: React.FC = () => {
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-[#1A1033] shadow-xs">
-                  ⚠️ Strike {warningToast.strikeNumber} of 2
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-[#1A1033] shadow-xs flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 text-[#1A1033]" />
+                  <span>Strike {warningToast.strikeNumber} of 2</span>
                 </span>
                 <span className="text-[11px] font-mono font-bold text-amber-300">
                   Tab Switch / Window Blur Detected
@@ -1119,7 +1120,8 @@ export const StudentExamPage: React.FC = () => {
 
             <div className="text-center">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-extrabold uppercase tracking-wider mb-2">
-                <span>⚠️ Security Violation: Strike 1 of 2</span>
+                <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                <span>Security Violation: Strike 1 of 2</span>
               </div>
               <h3 className="text-xl font-extrabold text-[#241748]">
                 Unauthorized Activity Detected!
@@ -1134,7 +1136,7 @@ export const StudentExamPage: React.FC = () => {
                 Proctor Warning: Leaving this examination window, switching tabs, capturing screenshots, or using Google Circle to Search is strictly prohibited.
               </p>
               <p>
-                ⚠️ <strong>THIS IS YOUR FIRST AND FINAL WARNING!</strong> If any other suspicious activity is detected, your exam paper will be <strong>AUTOMATICALLY SUBMITTED IMMEDIATELY</strong> with your current answers.
+                <strong>THIS IS YOUR FIRST AND FINAL WARNING!</strong> If any other suspicious activity is detected, your exam paper will be <strong>AUTOMATICALLY SUBMITTED IMMEDIATELY</strong> with your current answers.
               </p>
             </div>
 

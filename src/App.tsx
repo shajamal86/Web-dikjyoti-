@@ -1,8 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { Header } from './components/common/Header';
-import { Footer } from './components/common/Footer';
+import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 
 // Pages
@@ -17,12 +16,12 @@ import { StudentExamPage } from './pages/student/StudentExamPage';
 import { StudentResultPage } from './pages/student/StudentResultPage';
 import { StudentNotificationsPage } from './pages/student/StudentNotificationsPage';
 import { CompleteProfileModal } from './components/student/CompleteProfileModal';
-import { MonetagBannerAd } from './components/common/MonetagBannerAd';
 
 import { TeacherLoginPage } from './pages/teacher/TeacherLoginPage';
 import { TeacherSignupPage } from './pages/teacher/TeacherSignupPage';
 import { TeacherHomePage } from './pages/teacher/TeacherHomePage';
 import { TeacherCreateExamPage } from './pages/teacher/TeacherCreateExamPage';
+import { TeacherCsvPage } from './pages/teacher/TeacherCsvPage';
 import { TeacherAnalyticsPage } from './pages/teacher/TeacherAnalyticsPage';
 import { TeacherStudentsPage } from './pages/teacher/TeacherStudentsPage';
 
@@ -32,10 +31,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <div className="min-h-screen flex flex-col bg-[#F8F7F4] text-[#1B2A4A] selection:bg-[#D4AF37]/20 selection:text-[#1B2A4A]">
-          <Header />
-          <main className="flex-1 pb-16 md:pb-0">
-            <Routes>
+        <AppLayout>
+          <Routes>
               {/* Public & Role Selection */}
               <Route path="/" element={<LandingPage />} />
               <Route path="/about" element={<AboutPage />} />
@@ -124,6 +121,14 @@ export default function App() {
                 }
               />
               <Route
+                path="/teacher/csv"
+                element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherCsvPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/teacher/analytics"
                 element={
                   <ProtectedRoute requiredRole="teacher">
@@ -143,12 +148,9 @@ export default function App() {
               {/* Catch-all fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </main>
-          <MonetagBannerAd />
-          <Footer />
-          <CompleteProfileModal />
-        </div>
-      </AuthProvider>
-    </BrowserRouter>
+            <CompleteProfileModal />
+          </AppLayout>
+        </AuthProvider>
+      </BrowserRouter>
   );
 }

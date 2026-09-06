@@ -18,6 +18,7 @@ import {
   Wifi,
   WifiOff,
   Bell,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -93,6 +94,7 @@ export const Header: React.FC = () => {
 
             {/* Desktop Navigation Links */}
             <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
+              {/* Student Side Navigation: 1. Live Tests, 2. Rankings, 3. History, 4. Profile */}
               {isStudent && (
                 <>
                   <Link
@@ -139,25 +141,10 @@ export const Header: React.FC = () => {
                     <User className="w-4 h-4" />
                     <span>Profile</span>
                   </Link>
-                  <Link
-                    to="/student/notifications"
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all relative ${
-                      isActive('/student/notifications')
-                        ? 'bg-[#5B2E9E] text-white shadow-xs'
-                        : 'text-[#C9B8EE] hover:text-white hover:bg-[#5B2E9E]/40'
-                    }`}
-                  >
-                    <Bell className="w-4 h-4" />
-                    <span>Inbox</span>
-                    {unreadCount > 0 && (
-                      <span className="px-1.5 py-0.2 bg-[#F5A8C6] text-[#3E2072] text-[10px] font-extrabold rounded-full ml-0.5">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </Link>
                 </>
               )}
 
+              {/* Teacher Side Navigation: 1. Exams, 2. Create Exam, 3. CSV Import/Export, 4. Analytics, 5. Students */}
               {isTeacher && (
                 <>
                   <Link
@@ -181,6 +168,17 @@ export const Header: React.FC = () => {
                   >
                     <PlusCircle className="w-4 h-4" />
                     <span>Create Exam</span>
+                  </Link>
+                  <Link
+                    to="/teacher/csv"
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                      isActive('/teacher/csv')
+                        ? 'bg-[#5B2E9E] text-white shadow-xs'
+                        : 'text-[#C9B8EE] hover:text-white hover:bg-[#5B2E9E]/40'
+                    }`}
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>CSV Import/Export</span>
                   </Link>
                   <Link
                     to="/teacher/analytics"
@@ -223,6 +221,24 @@ export const Header: React.FC = () => {
             <div className="hidden md:flex items-center space-x-3">
               {user ? (
                 <div className="flex items-center gap-3">
+                  {/* Notifications Bell Icon for Student reachable from the top */}
+                  {isStudent && (
+                    <Link
+                      to="/student/notifications"
+                      title="Notifications"
+                      className={`relative p-2 rounded-xl text-white hover:bg-[#5B2E9E] transition-all ${
+                        isActive('/student/notifications') ? 'bg-[#5B2E9E]' : ''
+                      }`}
+                    >
+                      <Bell className="w-5 h-5 text-[#F5A8C6]" />
+                      {unreadCount > 0 && (
+                        <span className="absolute top-1 right-1 w-4 h-4 bg-[#D1467B] text-white text-[9px] font-extrabold rounded-full flex items-center justify-center">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </Link>
+                  )}
+
                   <div className="flex flex-col text-right">
                     <span className="text-sm font-bold text-white line-clamp-1 max-w-[150px]">
                       {user.displayName}
@@ -259,8 +275,23 @@ export const Header: React.FC = () => {
               )}
             </div>
 
-            {/* Mobile Menu Button */}
+            {/* Mobile Header Icons: Bell + Menu Button */}
             <div className="flex md:hidden items-center gap-2">
+              {isStudent && (
+                <Link
+                  to="/student/notifications"
+                  title="Notifications"
+                  className="relative p-2 rounded-xl text-white hover:bg-[#5B2E9E]"
+                >
+                  <Bell className="w-5 h-5 text-[#F5A8C6]" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 w-4 h-4 bg-[#D1467B] text-white text-[9px] font-extrabold rounded-full flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </Link>
+              )}
+
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -316,7 +347,7 @@ export const Header: React.FC = () => {
                   }`}
                 >
                   <History className="w-4 h-4" />
-                  <span>Exam History</span>
+                  <span>History</span>
                 </Link>
                 <Link
                   to="/student/profile"
@@ -326,7 +357,7 @@ export const Header: React.FC = () => {
                   }`}
                 >
                   <User className="w-4 h-4" />
-                  <span>My Profile</span>
+                  <span>Profile</span>
                 </Link>
                 <Link
                   to="/student/notifications"
@@ -358,7 +389,7 @@ export const Header: React.FC = () => {
                   }`}
                 >
                   <BookOpen className="w-4 h-4" />
-                  <span>Exams List</span>
+                  <span>Exams</span>
                 </Link>
                 <Link
                   to="/teacher/create-exam"
@@ -369,6 +400,16 @@ export const Header: React.FC = () => {
                 >
                   <PlusCircle className="w-4 h-4" />
                   <span>Create Exam</span>
+                </Link>
+                <Link
+                  to="/teacher/csv"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold ${
+                    isActive('/teacher/csv') ? 'bg-[#5B2E9E] text-white' : 'text-[#C9B8EE] hover:text-white'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>CSV Import/Export</span>
                 </Link>
                 <Link
                   to="/teacher/analytics"
@@ -444,7 +485,7 @@ export const Header: React.FC = () => {
         )}
       </header>
 
-      {/* Mobile Bottom Navigation Bar for Students — Matches .bottom-tabs from design mockup */}
+      {/* Persistent Bottom Navigation Bar for Students (4 sections: Live Tests, Rankings, History, Profile) */}
       {isStudent && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#ECE7F5] px-2 py-2 flex items-center justify-around shadow-[0_-8px_18px_rgba(60,30,110,0.06)]">
           <Link
@@ -493,6 +534,68 @@ export const Header: React.FC = () => {
           </Link>
         </div>
       )}
+
+      {/* Persistent Bottom Navigation Bar for Teachers (5 sections: Exams, Create Exam, CSV, Analytics, Students) */}
+      {isTeacher && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#ECE7F5] px-1 py-1.5 flex items-center justify-around shadow-[0_-8px_18px_rgba(60,30,110,0.06)]">
+          <Link
+            to="/teacher/home"
+            className={`flex flex-col items-center gap-0.5 flex-1 text-[9px] font-bold transition-all ${
+              isActive('/teacher/home') ? 'text-[#5B2E9E]' : 'text-[#9B93A8]'
+            }`}
+          >
+            <div className={`py-1 px-2.5 rounded-xl transition-colors ${isActive('/teacher/home') ? 'bg-[#EDE1FA]' : ''}`}>
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <span>Exams</span>
+          </Link>
+          <Link
+            to="/teacher/create-exam"
+            className={`flex flex-col items-center gap-0.5 flex-1 text-[9px] font-bold transition-all ${
+              isActive('/teacher/create-exam') ? 'text-[#5B2E9E]' : 'text-[#9B93A8]'
+            }`}
+          >
+            <div className={`py-1 px-2.5 rounded-xl transition-colors ${isActive('/teacher/create-exam') ? 'bg-[#EDE1FA]' : ''}`}>
+              <PlusCircle className="w-4 h-4" />
+            </div>
+            <span>Create</span>
+          </Link>
+          <Link
+            to="/teacher/csv"
+            className={`flex flex-col items-center gap-0.5 flex-1 text-[9px] font-bold transition-all ${
+              isActive('/teacher/csv') ? 'text-[#5B2E9E]' : 'text-[#9B93A8]'
+            }`}
+          >
+            <div className={`py-1 px-2.5 rounded-xl transition-colors ${isActive('/teacher/csv') ? 'bg-[#EDE1FA]' : ''}`}>
+              <FileSpreadsheet className="w-4 h-4" />
+            </div>
+            <span>CSV</span>
+          </Link>
+          <Link
+            to="/teacher/analytics"
+            className={`flex flex-col items-center gap-0.5 flex-1 text-[9px] font-bold transition-all ${
+              isActive('/teacher/analytics') ? 'text-[#5B2E9E]' : 'text-[#9B93A8]'
+            }`}
+          >
+            <div className={`py-1 px-2.5 rounded-xl transition-colors ${isActive('/teacher/analytics') ? 'bg-[#EDE1FA]' : ''}`}>
+              <BarChart3 className="w-4 h-4" />
+            </div>
+            <span>Stats</span>
+          </Link>
+          <Link
+            to="/teacher/students"
+            className={`flex flex-col items-center gap-0.5 flex-1 text-[9px] font-bold transition-all ${
+              isActive('/teacher/students') ? 'text-[#5B2E9E]' : 'text-[#9B93A8]'
+            }`}
+          >
+            <div className={`py-1 px-2.5 rounded-xl transition-colors ${isActive('/teacher/students') ? 'bg-[#EDE1FA]' : ''}`}>
+              <Users className="w-4 h-4" />
+            </div>
+            <span>Students</span>
+          </Link>
+        </div>
+      )}
     </>
   );
 };
+

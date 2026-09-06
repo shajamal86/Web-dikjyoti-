@@ -90,12 +90,25 @@ export async function saveStudentPrivateDetails(
     // 3. Mark public user document as profileCompleted = true
     try {
       const userRef = doc(db, 'users', studentId);
-      await updateDoc(userRef, {
-        profileCompleted: true,
-        updatedAt: now,
-      });
+      await setDoc(
+        userRef,
+        {
+          profileCompleted: true,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
     } catch (e) {
       console.warn('Could not update profileCompleted flag on users doc:', e);
+    }
+
+    // 4. Save synchronous client marker to prevent any modal flicker
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`dikjyoti_profile_completed_${studentId}`, 'true');
+      } catch {
+        // Ignore quota/storage restrictions
+      }
     }
 
     return payload;

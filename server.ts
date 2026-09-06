@@ -192,7 +192,7 @@ async function startServer() {
       if (storedPassword !== enteredPassword) {
         return res.status(401).json({
           success: false,
-          error: 'Invalid password. Please verify the code with your instructor.',
+          error: 'Incorrect password. Please verify the code and try again.',
         });
       }
 
@@ -528,20 +528,6 @@ async function startServer() {
 
   app.get('/sw.js', serveServiceWorker);
   app.get('/service-worker.js', serveServiceWorker);
-
-  // Serve Adsterra 300x250 Banner iframe document
-  app.get('/adsterra-banner.html', (req, res) => {
-    res.setHeader('Content-Type', 'text/html; charset=UTF-8');
-    const bannerPathDist = path.join(process.cwd(), 'dist', 'adsterra-banner.html');
-    const bannerPathPublic = path.join(process.cwd(), 'public', 'adsterra-banner.html');
-    res.sendFile(bannerPathPublic, (err) => {
-      if (err) {
-        res.sendFile(bannerPathDist, (err2) => {
-          if (err2) res.status(404).end();
-        });
-      }
-    });
-  });
 
   // Vite middleware setup
   if (process.env.NODE_ENV !== 'production') {

@@ -55,13 +55,40 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
       return null;
     }
     const data = snap.data();
+    const isTeacher = data.role === 'teacher';
+    
+    // Check if profile is already marked completed
+    let isCompleted = isTeacher || Boolean(data.profileCompleted);
+
+    // If student not marked completed, check localStorage guard and check if private details exist in Firestore
+    if (!isCompleted && !isTeacher) {
+      const localCompleted = typeof window !== 'undefined' && localStorage.getItem(`dikjyoti_profile_completed_${uid}`) === 'true';
+      if (localCompleted) {
+        isCompleted = true;
+      } else {
+        try {
+          const privateSnap = await getDoc(doc(db, 'users', uid, 'private', 'details'));
+          if (privateSnap.exists() && privateSnap.data()?.mobile) {
+            isCompleted = true;
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(`dikjyoti_profile_completed_${uid}`, 'true');
+            }
+            // Auto-heal the users doc
+            setDoc(userDocRef, { profileCompleted: true }, { merge: true }).catch(() => {});
+          }
+        } catch {
+          // Ignore permission/network error during fallback check
+        }
+      }
+    }
+
     return {
       uid,
       displayName: data.displayName || 'User',
       email: data.email || '',
       role: data.role as UserRole,
       isBlocked: Boolean(data.isBlocked),
-      profileCompleted: data.profileCompleted !== undefined ? Boolean(data.profileCompleted) : (data.role === 'teacher'),
+      profileCompleted: isCompleted,
       createdAt: data.createdAt || new Date().toISOString(),
       updatedAt: data.updatedAt,
       photoURL: data.photoURL,
