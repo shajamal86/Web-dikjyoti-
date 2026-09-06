@@ -9,6 +9,7 @@ import {
   updateSubjectDurations,
   getQuestionSet,
   appendQuestionToQuestionSet,
+  deleteQuestionFromQuestionSet,
   markSubjectAsComplete,
   publishExam,
 } from '../../services/examService';
@@ -375,12 +376,11 @@ export const TeacherCreateExamPage: React.FC = () => {
         id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         questionIndex: nextIndex,
         text: questionText.trim(),
-        imageUrl: questionImageUrl.trim() || undefined,
         options: {
-          a: { text: optionA.trim(), imageUrl: optionAImg.trim() || undefined },
-          b: { text: optionB.trim(), imageUrl: optionBImg.trim() || undefined },
-          c: { text: optionC.trim(), imageUrl: optionCImg.trim() || undefined },
-          d: { text: optionD.trim(), imageUrl: optionDImg.trim() || undefined },
+          a: { text: optionA.trim() },
+          b: { text: optionB.trim() },
+          c: { text: optionC.trim() },
+          d: { text: optionD.trim() },
         },
         correctOption,
         marks: Number(marks),
@@ -388,6 +388,23 @@ export const TeacherCreateExamPage: React.FC = () => {
         negativeMarks: hasNegativeMarking ? Number(negativeMarks) : 0,
         createdAt: new Date().toISOString(),
       };
+
+      // Only attach imageUrl properties if a valid non-empty URL string was supplied
+      if (questionImageUrl.trim()) {
+        questionItem.imageUrl = questionImageUrl.trim();
+      }
+      if (optionAImg.trim()) {
+        questionItem.options.a.imageUrl = optionAImg.trim();
+      }
+      if (optionBImg.trim()) {
+        questionItem.options.b.imageUrl = optionBImg.trim();
+      }
+      if (optionCImg.trim()) {
+        questionItem.options.c.imageUrl = optionCImg.trim();
+      }
+      if (optionDImg.trim()) {
+        questionItem.options.d.imageUrl = optionDImg.trim();
+      }
 
       // Appends question to the single document array in Firestore
       const result = await appendQuestionToQuestionSet(
@@ -449,6 +466,42 @@ export const TeacherCreateExamPage: React.FC = () => {
       setFormError(`Failed to save question: ${err.message}`);
     } finally {
       setSavingQuestion(false);
+    }
+  };
+
+  // Delete an individual question from the saved array in Firestore
+  const handleDeleteSavedQuestion = async (qId: string) => {
+    if (!exam || !selectedSubject) return;
+    const confirmDelete = window.confirm('Are you sure you want to delete this question?');
+    if (!confirmDelete) return;
+
+    try {
+      const result = await deleteQuestionFromQuestionSet(
+        exam.id,
+        selectedMedium,
+        selectedSubject,
+        qId
+      );
+
+      setCurrentQuestionSet((prev) => {
+        if (!prev) return prev;
+        const updatedList = (prev.questions || []).filter((q) => q.id !== qId);
+        return {
+          ...prev,
+          questions: updatedList,
+          questionsCount: result.questionsCount,
+        };
+      });
+
+      setSubjectQuestionCountMap((prev) => ({
+        ...prev,
+        [selectedSubject]: result.questionsCount,
+      }));
+
+      triggerToast('Question deleted successfully.');
+    } catch (err: any) {
+      console.error('Error deleting question:', err);
+      setFormError(`Failed to delete question: ${err.message}`);
     }
   };
 
@@ -791,7 +844,7 @@ export const TeacherCreateExamPage: React.FC = () => {
       )}
 
       {/* Wizard Step Progression Nav */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
         {/* Step 1 indicator */}
         <div
           onClick={() => setSelectedSubject(null)}
@@ -1463,12 +1516,22 @@ export const TeacherCreateExamPage: React.FC = () => {
                       className="p-3.5 bg-[#F8F7F4] border border-slate-200 rounded-lg text-xs space-y-2"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="font-semibold text-[#1B2A4A]">
+                        <div className="font-semibold text-[#1B2A4A] flex-1">
                           Q{idx + 1}. {q.text}
                         </div>
-                        <span className="text-[10px] font-bold text-[#1B2A4A] bg-amber-100 px-2 py-0.5 rounded shrink-0">
-                          {q.marks} Marks {q.hasNegativeMarking ? `(-${q.negativeMarks})` : ''}
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] font-bold text-[#1B2A4A] bg-amber-100 px-2 py-0.5 rounded">
+                            {q.marks} Marks {q.hasNegativeMarking ? `(-${q.negativeMarks})` : ''}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSavedQuestion(q.id)}
+                            className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Delete this question"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       {q.imageUrl && (

@@ -1009,11 +1009,15 @@ export const StudentExamPage: React.FC = () => {
 
         {/* Right: Question Palette / Grid (Column 4) */}
         <div
+          onClick={() => setShowPaletteMobile(false)}
           className={`fixed inset-0 z-50 bg-black/50 lg:static lg:bg-transparent lg:z-auto transition-opacity ${
             showPaletteMobile ? 'block' : 'hidden lg:block'
           }`}
         >
-          <div className="absolute right-0 top-0 bottom-0 w-80 lg:w-full bg-white lg:rounded-2xl border-l lg:border border-[#ECE7F5] p-5 overflow-y-auto space-y-5 shadow-lg lg:shadow-xs">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute right-0 top-0 bottom-0 w-80 max-w-[85vw] lg:w-full bg-white lg:rounded-2xl border-l lg:border border-[#ECE7F5] p-5 overflow-y-auto space-y-5 shadow-lg lg:shadow-xs"
+          >
             {/* Mobile Palette Header */}
             <div className="flex lg:hidden items-center justify-between pb-3 border-b border-[#ECE7F5]">
               <span className="font-extrabold text-sm text-[#241748]">Question Navigator</span>

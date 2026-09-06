@@ -24,6 +24,7 @@ import {
   OperationType,
   EXAM_SUBJECTS,
 } from '../types';
+import { sanitizeForFirestore } from '../utils/firestoreSanitizer';
 
 /**
  * Creates a new draft exam or updates an existing one
@@ -68,7 +69,7 @@ export async function createExamDraft(
   };
 
   try {
-    await setDoc(examRef, newExam);
+    await setDoc(examRef, sanitizeForFirestore(newExam));
     return newExam;
   } catch (error) {
     throw handleFirestoreError(error, OperationType.CREATE, `exams/${examId}`);
@@ -179,6 +180,9 @@ export async function appendQuestionToQuestionSet(
   const examRef = doc(db, 'exams', examId);
 
   try {
+    // Sanitize question data so no undefined properties reach Firestore
+    const cleanQuestion = sanitizeForFirestore<QuestionItem>(question);
+
     const snap = await getDoc(setRef);
     let newCount = 1;
 
@@ -191,19 +195,26 @@ export async function appendQuestionToQuestionSet(
         subject,
         isCompleted: false,
         questionsCount: 1,
-        questions: [question],
+        questions: [cleanQuestion],
         updatedAt: new Date().toISOString(),
       };
-      await setDoc(setRef, newDoc);
+      await setDoc(setRef, sanitizeForFirestore(newDoc));
     } else {
       // Append to the existing single document array
       const existingData = snap.data() as QuestionSetDocument;
-      newCount = (existingData.questions?.length || 0) + 1;
-      await updateDoc(setRef, {
-        questions: arrayUnion(question),
-        questionsCount: newCount,
-        updatedAt: new Date().toISOString(),
-      });
+      const currentList = existingData.questions || [];
+      const updatedList = [...currentList, cleanQuestion];
+      newCount = updatedList.length;
+
+      await setDoc(
+        setRef,
+        sanitizeForFirestore({
+          ...existingData,
+          questions: updatedList,
+          questionsCount: newCount,
+          updatedAt: new Date().toISOString(),
+        })
+      );
     }
 
     // Also update total questions on the exam document
@@ -218,6 +229,58 @@ export async function appendQuestionToQuestionSet(
     }
 
     return { questionsCount: newCount };
+  } catch (error) {
+    throw handleFirestoreError(error, OperationType.WRITE, `exams/${examId}/questionSets/${setId}`);
+  }
+}
+
+/**
+ * Deletes a question from the questionSet document array and updates counters.
+ */
+export async function deleteQuestionFromQuestionSet(
+  examId: string,
+  medium: MediumType,
+  subject: SubjectType,
+  questionId: string
+): Promise<{ questionsCount: number }> {
+  const setId = `${medium}_${subject}`;
+  const setRef = doc(db, 'exams', examId, 'questionSets', setId);
+  const examRef = doc(db, 'exams', examId);
+
+  try {
+    const snap = await getDoc(setRef);
+    if (!snap.exists()) return { questionsCount: 0 };
+
+    const data = snap.data() as QuestionSetDocument;
+    const filteredQuestions = (data.questions || []).filter((q) => q.id !== questionId);
+    // Re-index remaining questions
+    const reindexedQuestions = filteredQuestions.map((q, idx) => ({
+      ...q,
+      questionIndex: idx + 1,
+    }));
+
+    await setDoc(
+      setRef,
+      sanitizeForFirestore({
+        ...data,
+        questions: reindexedQuestions,
+        questionsCount: reindexedQuestions.length,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+
+    // Update total questions on exam document
+    const examSnap = await getDoc(examRef);
+    if (examSnap.exists()) {
+      const examData = examSnap.data() as ExamDocument;
+      const currentTotal = Math.max(0, (examData.mediums?.[medium]?.totalQuestions || 1) - 1);
+      await updateDoc(examRef, {
+        [`mediums.${medium}.totalQuestions`]: currentTotal,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    return { questionsCount: reindexedQuestions.length };
   } catch (error) {
     throw handleFirestoreError(error, OperationType.WRITE, `exams/${examId}/questionSets/${setId}`);
   }
@@ -385,7 +448,7 @@ export async function duplicateExam(
 
   try {
     // 1. Save duplicated master exam document
-    await setDoc(doc(db, 'exams', newExamId), newExam);
+    await setDoc(doc(db, 'exams', newExamId), sanitizeForFirestore(newExam));
 
     // 2. Clone all question sets into the new exam subcollection
     for (const qSet of sourceQuestionSets) {
@@ -395,7 +458,7 @@ export async function duplicateExam(
         examId: newExamId,
         updatedAt: new Date().toISOString(),
       };
-      await setDoc(doc(db, 'exams', newExamId, 'questionSets', qSet.id), clonedSet);
+      await setDoc(doc(db, 'exams', newExamId, 'questionSets', qSet.id), sanitizeForFirestore(clonedSet));
     }
 
     return newExam;

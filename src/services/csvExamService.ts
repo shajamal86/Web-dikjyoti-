@@ -21,6 +21,7 @@ import {
   OperationType,
 } from '../types';
 import { getAllExamQuestionSets } from './examService';
+import { sanitizeForFirestore } from '../utils/firestoreSanitizer';
 
 export const CSV_COLUMNS = [
   'Subject',
@@ -276,23 +277,42 @@ export async function bulkImportQuestionsToExam(
     }
 
     const startIndex = currentQuestions.length;
-    const newItems: QuestionItem[] = group.rows.map((r, i) => ({
-      id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${startIndex + i + 1}`,
-      questionIndex: startIndex + i + 1,
-      text: r.questionText,
-      imageUrl: r.questionImageUrl,
-      options: {
-        a: { text: r.optionA, imageUrl: r.optionA_ImageUrl },
-        b: { text: r.optionB, imageUrl: r.optionB_ImageUrl },
-        c: { text: r.optionC, imageUrl: r.optionC_ImageUrl },
-        d: { text: r.optionD, imageUrl: r.optionD_ImageUrl },
-      },
-      correctOption: r.correctOption,
-      marks: r.marks,
-      hasNegativeMarking: r.hasNegativeMarking,
-      negativeMarks: r.negativeMarks,
-      createdAt: new Date().toISOString(),
-    }));
+    const newItems: QuestionItem[] = group.rows.map((r, i) => {
+      const item: QuestionItem = {
+        id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${startIndex + i + 1}`,
+        questionIndex: startIndex + i + 1,
+        text: r.questionText,
+        options: {
+          a: { text: r.optionA },
+          b: { text: r.optionB },
+          c: { text: r.optionC },
+          d: { text: r.optionD },
+        },
+        correctOption: r.correctOption,
+        marks: r.marks,
+        hasNegativeMarking: r.hasNegativeMarking,
+        negativeMarks: r.negativeMarks,
+        createdAt: new Date().toISOString(),
+      };
+
+      if (r.questionImageUrl?.trim()) {
+        item.imageUrl = r.questionImageUrl.trim();
+      }
+      if (r.optionA_ImageUrl?.trim()) {
+        item.options.a.imageUrl = r.optionA_ImageUrl.trim();
+      }
+      if (r.optionB_ImageUrl?.trim()) {
+        item.options.b.imageUrl = r.optionB_ImageUrl.trim();
+      }
+      if (r.optionC_ImageUrl?.trim()) {
+        item.options.c.imageUrl = r.optionC_ImageUrl.trim();
+      }
+      if (r.optionD_ImageUrl?.trim()) {
+        item.options.d.imageUrl = r.optionD_ImageUrl.trim();
+      }
+
+      return item;
+    });
 
     const shouldMarkComplete =
       options.autoMarkSubjectsComplete || isAlreadyComplete;
@@ -310,7 +330,7 @@ export async function bulkImportQuestionsToExam(
       updatedAt: new Date().toISOString(),
     };
 
-    await setDoc(setRef, setDocData);
+    await setDoc(setRef, sanitizeForFirestore(setDocData));
 
     mediumTotalIncrements[group.medium] += newItems.length;
 

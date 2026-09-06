@@ -277,8 +277,8 @@ export const TeacherHomePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Table Body */}
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs sm:text-sm">
             <thead className="bg-[#F8F7F4] text-[#1B2A4A] font-semibold border-b border-slate-200">
               <tr>
@@ -447,6 +447,149 @@ export const TeacherHomePage: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Cards View (Visible on Small / Mobile Screens) */}
+        <div className="block md:hidden divide-y divide-slate-100">
+          {loading ? (
+            <div className="text-center py-10 text-slate-400">
+              <div className="w-6 h-6 border-2 border-[#1B2A4A]/20 border-t-[#D4AF37] rounded-full animate-spin mx-auto mb-2"></div>
+              <p className="text-xs">Loading examination directory...</p>
+            </div>
+          ) : filteredExams.length === 0 ? (
+            <div className="text-center py-10 px-4 text-slate-400">
+              <BookOpen className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+              <p className="font-semibold text-slate-700 text-sm">
+                {activeTab === 'drafts'
+                  ? 'No active draft papers.'
+                  : activeTab === 'live'
+                  ? 'No live exams published.'
+                  : 'No exams found.'}
+              </p>
+              <div className="mt-4">
+                <Link
+                  to="/teacher/create-exam"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1B2A4A] text-white text-xs font-semibold rounded-lg shadow-sm"
+                >
+                  <PlusCircle className="w-4 h-4 text-[#D4AF37]" />
+                  <span>Start New Exam Wizard</span>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            filteredExams.map((exam) => {
+              const hindiComp = exam.mediums?.hindi?.completedSubjects?.length || 0;
+              const assamComp = exam.mediums?.assamese?.completedSubjects?.length || 0;
+              const totalQ =
+                (exam.mediums?.hindi?.totalQuestions || 0) +
+                (exam.mediums?.assamese?.totalQuestions || 0);
+
+              const totalDuration =
+                (exam.subjectDurations?.math || 15) +
+                (exam.subjectDurations?.reasoning || 15) +
+                (exam.subjectDurations?.hindi || 15) +
+                (exam.subjectDurations?.gk || 15);
+
+              const isDraft = exam.status === 'draft';
+
+              return (
+                <div key={exam.id} className="p-4 space-y-3 bg-white">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-[#1B2A4A] text-sm flex items-center gap-1.5">
+                        <span>{exam.title}</span>
+                        {isDraft && (
+                          <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        Created {new Date(exam.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+                        exam.status === 'live'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {exam.status === 'live' ? 'Live' : 'Draft'}
+                    </span>
+                  </div>
+
+                  {/* Durations & Questions Badges */}
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-[#1B2A4A] font-semibold">
+                      ⏱ {totalDuration} mins
+                    </span>
+                    <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-[#1B2A4A] font-bold">
+                      📝 {totalQ} Qs
+                    </span>
+                  </div>
+
+                  {/* Medium Progress Badges */}
+                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${hindiComp === 4 ? 'bg-emerald-600' : 'bg-blue-600'}`}></span>
+                      <span className="text-[#1B2A4A] font-medium truncate">Hindi: {hindiComp}/4</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${assamComp === 4 ? 'bg-emerald-600' : 'bg-indigo-600'}`}></span>
+                      <span className="text-[#1B2A4A] font-medium truncate">Assamese: {assamComp}/4</span>
+                    </div>
+                  </div>
+
+                  {/* Actions Bar for Mobile */}
+                  <div className="pt-2 flex items-center gap-2">
+                    <Link
+                      to={`/teacher/create-exam?examId=${exam.id}`}
+                      className={`flex-1 inline-flex items-center justify-center gap-1 text-xs font-bold py-2.5 px-3 rounded-xl transition-colors shadow-2xs ${
+                        isDraft
+                          ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                          : 'bg-[#1B2A4A] hover:bg-[#253963] text-white'
+                      }`}
+                    >
+                      <span>{isDraft ? 'Resume Wizard' : 'Manage Exam'}</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    </Link>
+
+                    <button
+                      onClick={() => setBulkUploadExam(exam)}
+                      className="p-2.5 text-[#1B2A4A] hover:bg-slate-100 rounded-xl border border-slate-200"
+                      title="Bulk CSV Upload"
+                    >
+                      <Upload className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      onClick={() => setExportExam(exam)}
+                      className="p-2.5 text-[#1B2A4A] hover:bg-emerald-50 rounded-xl border border-slate-200"
+                      title="Export CSV"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      onClick={() => setDuplicateExamTarget(exam)}
+                      className="p-2.5 text-slate-500 hover:bg-blue-50 rounded-xl border border-slate-200"
+                      title="Duplicate Exam"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      onClick={() => setDeleteExamTarget(exam)}
+                      className="p-2.5 text-slate-400 hover:text-red-600 rounded-xl border border-slate-200 hover:bg-red-50"
+                      title="Delete Exam"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
